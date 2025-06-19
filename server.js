@@ -184,7 +184,85 @@ function generateGraphUrl(pageId) {
   return `${GRAPH_BASE_URL}?page=${pageId}`;
 }
 
-// ===== VERCEL-OPTIMIZED NOTION FUNCTIONS =====
+// ===== NOTION INTEGRATION FUNCTIONS =====
+
+async function appendGraphToNotionPage(notionPageId, graphUrl, graphTitle) {
+  try {
+    console.log(`📝 Attempting to append graph to Notion page: ${notionPageId}`);
+    
+    // Verify the page exists and we have access
+    const page = await notion.pages.retrieve({ page_id: notionPageId });
+    
+    if (!page) {
+      throw new Error('Notion page not found or access denied');
+    }
+
+    console.log('✅ Page found, appending content...');
+
+    // Create blocks to append
+    const blocksToAppend = [
+      {
+        object: 'block',
+        type: 'divider',
+        divider: {}
+      },
+      {
+        object: 'block',
+        type: 'heading_3',
+        heading_3: {
+          rich_text: [
+            { 
+              type: 'text', 
+              text: { content: graphTitle }
+            }
+          ]
+        }
+      },
+      {
+        object: 'block',
+        type: 'embed',
+        embed: {
+          url: graphUrl
+        }
+      },
+      {
+        object: 'block',
+        type: 'paragraph',
+        paragraph: {
+          rich_text: [
+            { 
+              type: 'text', 
+              text: { 
+                content: `Generated: ${new Date().toLocaleString()} | Storage: ${isFirebaseEnabled ? 'Firebase' : 'Memory'}` 
+              },
+              annotations: {
+                color: 'gray'
+              }
+            }
+          ]
+        }
+      }
+    ];
+
+    // Append blocks to the page
+    const response = await notion.blocks.children.append({
+      block_id: notionPageId,
+      children: blocksToAppend
+    });
+
+    console.log('✅ Successfully appended blocks to Notion page');
+
+    return {
+      success: true,
+      blocksAdded: response.results.length,
+      timestamp: new Date().toISOString()
+    };
+
+  } catch (error) {
+    console.error('❌ Error appending to Notion page:', error);
+    throw new Error(`Failed to append to Notion page: ${error.message}`);
+  }
+}
 
 async function fetchToggleBlockStructure({ pageId, text }) {
   const baseUrl = 'https://api.notion.com/v1/blocks';
@@ -641,21 +719,48 @@ app.post('/api/create-graph', async (req, res) => {
     await saveGraphToFirestore(uniquePageId, cleanedGraphData);
     console.log(`✅ Graph stored with ID: ${uniquePageId}`);
 
-    // Generate URL and respond
+    // Generate URL
     const graphUrl = generateGraphUrl(uniquePageId);
+    console.log(`🔗 Generated graph URL: ${graphUrl}`);
 
-    res.json({
-      success: true,
-      graphUrl: graphUrl,
-      graphId: uniquePageId,
-      stats: {
-        nodes: cleanedGraphData.nodes.length,
-        edges: cleanedGraphData.edges.length,
-        storage: isFirebaseEnabled ? 'firebase' : 'memory',
-        processingTimeMs: Date.now() - startTime
-      },
-      message: `Graph created successfully! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'}`
-    });
+    // ✨ APPEND GRAPH TO NOTION PAGE ✨
+    try {
+      const graphTitle = `📊 Process Flow: ${text}`;
+      const appendResult = await appendGraphToNotionPage(pageId, graphUrl, graphTitle);
+      console.log(`✅ Graph successfully added to Notion page`);
+      
+      res.json({
+        success: true,
+        graphUrl: graphUrl,
+        graphId: uniquePageId,
+        stats: {
+          nodes: cleanedGraphData.nodes.length,
+          edges: cleanedGraphData.edges.length,
+          storage: isFirebaseEnabled ? 'firebase' : 'memory',
+          processingTimeMs: Date.now() - startTime
+        },
+        notionResult: appendResult,
+        message: `✅ Graph created and added to Notion page successfully! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'}`
+      });
+      
+    } catch (notionError) {
+      console.error('❌ Failed to add graph to Notion page:', notionError);
+      
+      // Still return success for graph creation, but note the Notion error
+      res.json({
+        success: true,
+        graphUrl: graphUrl,
+        graphId: uniquePageId,
+        stats: {
+          nodes: cleanedGraphData.nodes.length,
+          edges: cleanedGraphData.edges.length,
+          storage: isFirebaseEnabled ? 'firebase' : 'memory',
+          processingTimeMs: Date.now() - startTime
+        },
+        warning: `Graph created but failed to add to Notion page: ${notionError.message}`,
+        message: `⚠️ Graph created successfully but couldn't add to Notion page. You can access it directly via the URL.`
+      });
+    }
 
   } catch (error) {
     console.error('❌ Error creating graph:', error);
