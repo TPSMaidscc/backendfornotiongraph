@@ -479,14 +479,22 @@ function transformToggleToReactFlow(toggleStructureJson) {
     // Extract title from patterns like:
     // "← Policy: (→ policy name ←)" -> "policy name"
     
+    console.log(`🔍 Extracting policy title from: "${content}"`);
+    
     // First try to match with parentheses
     const matchWithParens = content.match(/←\s*Policy\s*:\s*\(→\s*(.+?)\s*←\)/);
     if (matchWithParens) {
       const title = matchWithParens[1].trim();
+      console.log(`✅ Found policy title in parentheses: "${title}"`);
       
-      // Check if it's a generic placeholder
+      // Even if it's a placeholder, we'll show it and try to get better content from children
       if (title.includes('Type your Policy Name Here')) {
-        return getFirstFiveWordsFromFirstListItem(block);
+        const betterTitle = getFirstFiveWordsFromFirstListItem(block);
+        if (betterTitle && betterTitle !== 'Policy') {
+          console.log(`✅ Found better policy title from children: "${betterTitle}"`);
+          return betterTitle;
+        }
+        return 'Policy (Template)'; // Show even template policies
       }
       
       return title;
@@ -496,58 +504,101 @@ function transformToggleToReactFlow(toggleStructureJson) {
     const matchAfterPolicy = content.match(/←\s*Policy\s*:\s*(.+)/);
     if (matchAfterPolicy) {
       const title = matchAfterPolicy[1].trim();
+      console.log(`✅ Found policy title after colon: "${title}"`);
       
-      // Check if it's empty or a generic placeholder
-      if (!title || title === "Type your Policy Name Here" || title.includes("optional title")) {
-        return getFirstFiveWordsFromFirstListItem(block);
+      // Clean up common patterns
+      const cleanedTitle = title
+        .replace(/\s*-\s*optional title.*$/i, '')
+        .replace(/^\(→\s*/, '')
+        .replace(/\s*←\)$/, '')
+        .trim();
+      
+      if (!cleanedTitle || cleanedTitle === "Type your Policy Name Here") {
+        const betterTitle = getFirstFiveWordsFromFirstListItem(block);
+        if (betterTitle && betterTitle !== 'Policy') {
+          console.log(`✅ Found better policy title from children: "${betterTitle}"`);
+          return betterTitle;
+        }
+        return 'Policy (Empty)'; // Show even empty policies
       }
       
-      return title.replace(/\s*-\s*optional title.*$/, '').trim();
+      return cleanedTitle;
     }
     
-    // Handle cases without anything after colon
-    return getFirstFiveWordsFromFirstListItem(block);
+    // Handle cases without anything after colon like "← Policy:" or "← Policy: "
+    if (content.match(/←\s*Policy\s*:\s*$/)) {
+      console.log(`🔍 Empty policy found, checking children...`);
+      const childTitle = getFirstFiveWordsFromFirstListItem(block);
+      if (childTitle && childTitle !== 'Policy') {
+        console.log(`✅ Found policy title from children: "${childTitle}"`);
+        return childTitle;
+      }
+      return 'Policy (No Title)'; // Show even untitled policies
+    }
+    
+    console.log(`⚠️ Could not extract policy title from: "${content}"`);
+    return 'Policy (Unknown)';
   }
   
   function getFirstFiveWordsFromFirstListItem(block) {
     if (!block.children || block.children.length === 0) {
-      return "Policy";
+      console.log(`⚠️ No children found for policy block`);
+      return null;
     }
+    
+    console.log(`🔍 Checking ${block.children.length} children for policy content...`);
     
     // Find the first list item (bulleted_list_item or numbered_list_item)
     for (const child of block.children) {
       if (child.type === 'bulleted_list_item' || child.type === 'numbered_list_item') {
         const listContent = child.content;
+        console.log(`📄 Found list item with content: "${listContent}"`);
+        
         if (listContent && listContent.trim()) {
           const words = listContent.trim().split(/\s+/);
           const firstFiveWords = words.slice(0, 5).join(' ');
-          return firstFiveWords || "Policy";
+          console.log(`✅ Extracted first 5 words: "${firstFiveWords}"`);
+          return firstFiveWords || "List Content";
         }
       }
     }
     
-    return "Policy";
+    console.log(`⚠️ No meaningful list content found`);
+    return null;
   }
   
   function isPolicyEmpty(block) {
+    // We'll be more lenient - show policies even if they seem "empty"
+    // Only skip if there's absolutely no content structure
+    
     if (!block.children || block.children.length === 0) {
-      return true;
+      console.log(`📋 Policy has no children - will still show as placeholder`);
+      return false; // Don't skip - show as placeholder
     }
     
-    // Check if all list children are empty
+    // Check if all list children are completely empty
     const listItems = block.children.filter(child => 
       child.type === 'bulleted_list_item' || child.type === 'numbered_list_item'
     );
     
     if (listItems.length === 0) {
-      return true;
+      console.log(`📋 Policy has children but no list items - will still show`);
+      return false; // Don't skip - might have other content
     }
     
-    // Policy is empty if all list items have no content
-    return listItems.every(item => {
+    // Only consider it truly empty if ALL list items are completely empty
+    const allEmpty = listItems.every(item => {
       const content = item.content;
       return !content || !content.trim();
     });
+    
+    if (allEmpty) {
+      console.log(`📋 All policy list items are empty - will still show as template`);
+      return false; // Even completely empty policies should be shown
+    }
+    
+    console.log(`📋 Policy has some content in list items`);
+    return false; // Never skip policies
   }
   
   function cleanText(text) {
@@ -663,37 +714,41 @@ function transformToggleToReactFlow(toggleStructureJson) {
     }
     // Check if it's a policy
     else if (isPolicy(content)) {
-      const policyTitle = extractPolicyTitle(content, block);
+      console.log(`📋 Found policy block: "${content.substring(0, 100)}..."`);
       
-      if (policyTitle && !isPolicyEmpty(block)) {
-        shouldCreateNode = true;
-        const cleanedContent = cleanText(policyTitle);
-        
-        nodeData = {
-          label: `📋 ${cleanedContent}`,
-          originalContent: content,
-          cleanedContent: cleanedContent,
-          blockType: block.type,
-          nodeType: 'policy',
-          depth: level
-        };
-        nodeStyle = {
-          background: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
-          border: 'none',
-          borderRadius: '12px',
-          fontSize: '14px',
-          fontWeight: '600',
-          padding: '18px 22px',
-          minWidth: '200px',
-          maxWidth: '300px',
-          boxShadow: '0 6px 20px rgba(79, 209, 199, 0.3)',
-          textAlign: 'center',
-          color: '#2d3748'
-        };
-        console.log(`✅ Created Policy node: ${nodeData.label}`);
-      } else {
-        console.log(`⚠️ Skipped empty policy: ${content.substring(0, 50)}...`);
-      }
+      const policyTitle = extractPolicyTitle(content, block);
+      console.log(`📋 Extracted policy title: "${policyTitle}"`);
+      
+      // Always create policy nodes - don't skip any
+      shouldCreateNode = true;
+      const cleanedContent = cleanText(policyTitle);
+      
+      nodeData = {
+        label: `📋 ${cleanedContent}`,
+        originalContent: content,
+        cleanedContent: cleanedContent,
+        blockType: block.type,
+        nodeType: 'policy',
+        depth: level
+      };
+      nodeStyle = {
+        background: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+        border: 'none',
+        borderRadius: '12px',
+        fontSize: '14px',
+        fontWeight: '600',
+        padding: '18px 22px',
+        minWidth: '200px',
+        maxWidth: '300px',
+        boxShadow: '0 6px 20px rgba(79, 209, 199, 0.3)',
+        textAlign: 'center',
+        color: '#2d3748'
+      };
+      console.log(`✅ Created Policy node: ${nodeData.label}`);
+    }
+    else {
+      // Log blocks that don't match our patterns
+      console.log(`⚠️ Block doesn't match any pattern at level ${level}: "${content.substring(0, 50)}..." (type: ${block.type})`);
     }
     
     let currentNodeId = null;
