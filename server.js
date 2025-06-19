@@ -1,4 +1,3 @@
-// Vercel-compatible server.js with hardcoded configuration
 const express = require('express');
 const { Client } = require('@notionhq/client');
 const cors = require('cors');
@@ -267,11 +266,11 @@ async function appendGraphToNotionPage(notionPageId, graphUrl, graphTitle) {
 async function fetchToggleBlockStructure({ pageId, text }) {
   const baseUrl = 'https://api.notion.com/v1/blocks';
   const startTime = Date.now();
-  const TIMEOUT_BUFFER = 20000; // 20 seconds for Vercel (max 30s)
+  const TIMEOUT_BUFFER = 50000; // 50 seconds - removed time constraint since user doesn't care about time
 
   const checkTimeout = () => {
     if (Date.now() - startTime > TIMEOUT_BUFFER) {
-      throw new Error('Operation timed out - structure too complex for serverless');
+      throw new Error('Operation timed out after 50 seconds');
     }
   };
 
@@ -284,12 +283,12 @@ async function fetchToggleBlockStructure({ pageId, text }) {
       'Content-Type': 'application/json'
     };
 
-    // Fetch page children with timeout
+    // Fetch page children with longer timeout
     console.log(`🔍 Fetching page children for: ${pageId}`);
     const pageResponse = await fetch(`${baseUrl}/${pageId}/children`, { 
       method: 'GET', 
       headers,
-      signal: AbortSignal.timeout(10000) // 10s timeout
+      signal: AbortSignal.timeout(20000) // 20s timeout for page fetch
     });
     
     if (!pageResponse.ok) {
@@ -317,7 +316,7 @@ async function fetchToggleBlockStructure({ pageId, text }) {
         const childResponse = await fetch(`${baseUrl}/${callout.id}/children`, { 
           method: 'GET', 
           headers,
-          signal: AbortSignal.timeout(8000) // 8s timeout per callout
+          signal: AbortSignal.timeout(15000) // 15s timeout per callout
         });
         
         if (!childResponse.ok) {
@@ -344,13 +343,14 @@ async function fetchToggleBlockStructure({ pageId, text }) {
         });
 
         if (toggle) {
-          console.log(`🎯 Processing toggle structure...`);
+          console.log(`🎯 Processing toggle structure with NO DEPTH LIMIT...`);
           const result = {
             toggleBlock: await simplifyBlockForVercel(toggle, headers, 0),
             metadata: {
               searchText: text,
               processingTimeMs: Date.now() - startTime,
-              foundInCalloutId: callout.id
+              foundInCalloutId: callout.id,
+              depthLimit: 'NONE'
             }
           };
           return { result: JSON.stringify(result, null, 2) };
@@ -369,7 +369,8 @@ async function fetchToggleBlockStructure({ pageId, text }) {
 }
 
 async function simplifyBlockForVercel(block, headers, depth) {
-  if (depth > 4) return null; // Limit depth for Vercel performance
+  // REMOVED DEPTH LIMIT - process all levels
+  console.log(`📊 Processing block at depth ${depth} (no limit)`);
 
   const extractContent = (richText) => {
     if (!richText || !Array.isArray(richText)) return '';
@@ -397,32 +398,50 @@ async function simplifyBlockForVercel(block, headers, depth) {
     case 'numbered_list_item':
       simplified.content = extractContent(block.numbered_list_item?.rich_text);
       break;
+    case 'heading_1':
+      simplified.content = extractContent(block.heading_1?.rich_text);
+      break;
+    case 'heading_2':
+      simplified.content = extractContent(block.heading_2?.rich_text);
+      break;
+    case 'heading_3':
+      simplified.content = extractContent(block.heading_3?.rich_text);
+      break;
+    case 'to_do':
+      simplified.content = extractContent(block.to_do?.rich_text);
+      break;
+    case 'quote':
+      simplified.content = extractContent(block.quote?.rich_text);
+      break;
+    case 'callout':
+      simplified.content = extractContent(block.callout?.rich_text);
+      break;
     default:
       simplified.content = `[${block.type}]`;
       break;
   }
 
-  // Fetch children with strict limits for Vercel
-  if (block.has_children && depth < 3) {
+  // Fetch ALL children regardless of depth
+  if (block.has_children) {
     try {
       const childResponse = await fetch(`https://api.notion.com/v1/blocks/${block.id}/children`, {
         method: 'GET',
         headers,
-        signal: AbortSignal.timeout(5000) // 5s timeout
+        signal: AbortSignal.timeout(10000) // 10s timeout per block
       });
       
       if (childResponse.ok) {
         const childData = await childResponse.json();
-        // Limit to first 8 children for performance
-        const limitedChildren = childData.results.slice(0, 8);
+        console.log(`📄 Found ${childData.results.length} children at depth ${depth}`);
         
+        // Process ALL children - no limit on number or depth
         simplified.children = await Promise.all(
-          limitedChildren.map(child => simplifyBlockForVercel(child, headers, depth + 1))
+          childData.results.map(child => simplifyBlockForVercel(child, headers, depth + 1))
         );
         simplified.children = simplified.children.filter(Boolean);
       }
     } catch (error) {
-      console.warn(`⚠️ Failed to fetch children for ${block.id}: ${error.message}`);
+      console.warn(`⚠️ Failed to fetch children for ${block.id} at depth ${depth}: ${error.message}`);
       simplified.hasChildren = true;
     }
   }
