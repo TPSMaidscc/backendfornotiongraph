@@ -449,7 +449,7 @@ async function simplifyBlockForVercel(block, headers, depth) {
   return simplified;
 }
 
-// Improved transformation function with proper subtree width calculation
+// Proper transformation function to extract real Notion content
 function transformToggleToReactFlow(toggleStructureJson) {
   const toggleStructure = JSON.parse(toggleStructureJson);
   const nodes = [];
@@ -457,25 +457,35 @@ function transformToggleToReactFlow(toggleStructureJson) {
   let nodeIdCounter = 1;
 
   // Layout configuration with proper spacing
-  const HORIZONTAL_SPACING = 350; // Base spacing between nodes
-  const VERTICAL_SPACING = 220;   // Vertical spacing between levels
-  const MIN_SUBTREE_SPACING = 100; // Minimum space between subtrees
+  const HORIZONTAL_SPACING = 350;
+  const VERTICAL_SPACING = 220;
+  
+  // Track positions for layout
+  const levelPositions = new Map();
   
   // Helper functions for content analysis
   function isCondition(content) {
+    // Check for condition patterns like ❶, ❷, ❸, etc. followed by "Condition"
     return /[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(content);
   }
   
   function isPolicy(content) {
+    // Check for policy patterns like "← Policy:" or "← Policy: (→ something ←)"
     return /←\s*Policy\s*:/.test(content);
   }
   
   function extractConditionTitle(content) {
+    // Extract title from patterns like:
+    // "❶ Condition (→ x=5 ←)" -> "x=5"
+    // "❷ Condition (→ y=2 ←)" -> "y=2"
+    
+    // First try to match with parentheses
     const matchWithParens = content.match(/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition\s*\(→\s*(.+?)\s*←\)/);
     if (matchWithParens) {
       return matchWithParens[1].trim();
     }
     
+    // Then try to match everything after "❶ Condition "
     const matchAfterCondition = content.match(/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition\s+(.+)/);
     if (matchAfterCondition) {
       return matchAfterCondition[1].trim();
@@ -485,30 +495,37 @@ function transformToggleToReactFlow(toggleStructureJson) {
   }
   
   function extractPolicyTitle(content, block) {
+    // Extract title from patterns like:
+    // "← Policy: (→ policy name ←)" -> "policy name"
+    
     console.log(`🔍 Extracting policy title from: "${content}"`);
     
+    // First try to match with parentheses
     const matchWithParens = content.match(/←\s*Policy\s*:\s*\(→\s*(.+?)\s*←\)/);
     if (matchWithParens) {
       const title = matchWithParens[1].trim();
       console.log(`✅ Found policy title in parentheses: "${title}"`);
       
+      // Even if it's a placeholder, we'll show it and try to get better content from children
       if (title.includes('Type your Policy Name Here')) {
         const betterTitle = getFirstFiveWordsFromFirstListItem(block);
         if (betterTitle && betterTitle !== 'Policy') {
           console.log(`✅ Found better policy title from children: "${betterTitle}"`);
           return betterTitle;
         }
-        return 'Policy (Template)';
+        return 'Policy (Template)'; // Show even template policies
       }
       
       return title;
     }
     
+    // Then try to match everything after "← Policy: "
     const matchAfterPolicy = content.match(/←\s*Policy\s*:\s*(.+)/);
     if (matchAfterPolicy) {
       const title = matchAfterPolicy[1].trim();
       console.log(`✅ Found policy title after colon: "${title}"`);
       
+      // Clean up common patterns
       const cleanedTitle = title
         .replace(/\s*-\s*optional title.*$/i, '')
         .replace(/^\(→\s*/, '')
@@ -521,12 +538,13 @@ function transformToggleToReactFlow(toggleStructureJson) {
           console.log(`✅ Found better policy title from children: "${betterTitle}"`);
           return betterTitle;
         }
-        return 'Policy (Empty)';
+        return 'Policy (Empty)'; // Show even empty policies
       }
       
       return cleanedTitle;
     }
     
+    // Handle cases without anything after colon like "← Policy:" or "← Policy: "
     if (content.match(/←\s*Policy\s*:\s*$/)) {
       console.log(`🔍 Empty policy found, checking children...`);
       const childTitle = getFirstFiveWordsFromFirstListItem(block);
@@ -534,7 +552,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
         console.log(`✅ Found policy title from children: "${childTitle}"`);
         return childTitle;
       }
-      return 'Policy (No Title)';
+      return 'Policy (No Title)'; // Show even untitled policies
     }
     
     console.log(`⚠️ Could not extract policy title from: "${content}"`);
@@ -549,6 +567,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
     
     console.log(`🔍 Checking ${block.children.length} children for policy content...`);
     
+    // Find the first list item (bulleted_list_item or numbered_list_item)
     for (const child of block.children) {
       if (child.type === 'bulleted_list_item' || child.type === 'numbered_list_item') {
         const listContent = child.content;
@@ -567,58 +586,59 @@ function transformToggleToReactFlow(toggleStructureJson) {
     return null;
   }
   
+  function isPolicyEmpty(block) {
+    // We'll be more lenient - show policies even if they seem "empty"
+    // Only skip if there's absolutely no content structure
+    
+    if (!block.children || block.children.length === 0) {
+      console.log(`📋 Policy has no children - will still show as placeholder`);
+      return false; // Don't skip - show as placeholder
+    }
+    
+    // Check if all list children are completely empty
+    const listItems = block.children.filter(child => 
+      child.type === 'bulleted_list_item' || child.type === 'numbered_list_item'
+    );
+    
+    if (listItems.length === 0) {
+      console.log(`📋 Policy has children but no list items - will still show`);
+      return false; // Don't skip - might have other content
+    }
+    
+    // Only consider it truly empty if ALL list items are completely empty
+    const allEmpty = listItems.every(item => {
+      const content = item.content;
+      return !content || !content.trim();
+    });
+    
+    if (allEmpty) {
+      console.log(`📋 All policy list items are empty - will still show as template`);
+      return false; // Even completely empty policies should be shown
+    }
+    
+    console.log(`📋 Policy has some content in list items`);
+    return false; // Never skip policies
+  }
+  
   function cleanText(text) {
     return text
-      .replace(/["\[\]]/g, '')
-      .replace(/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]/g, '')
-      .replace(/^\s*←?\s*/, '')
-      .replace(/^\s*→?\s*/, '')
-      .replace(/\s*←\s*$/, '')
-      .replace(/\s*→\s*$/, '')
-      .replace(/\(\s*→\s*/, '(')
-      .replace(/\s*←\s*\)/, ')')
-      .replace(/â/g, '')
-      .replace(/\s+/g, ' ')
+      .replace(/["\[\]]/g, '') // Remove quotes and brackets
+      .replace(/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]/g, '') // Remove number emojis
+      .replace(/^\s*←?\s*/, '') // Remove leading arrows and spaces
+      .replace(/^\s*→?\s*/, '') // Remove right arrows
+      .replace(/\s*←\s*$/, '') // Remove trailing arrows
+      .replace(/\s*→\s*$/, '') // Remove trailing right arrows
+      .replace(/\(\s*→\s*/, '(') // Clean up arrow patterns in parentheses
+      .replace(/\s*←\s*\)/, ')') // Clean up arrow patterns in parentheses
+      .replace(/â/g, '') // Remove the â character
+      .replace(/\s+/g, ' ') // Replace multiple spaces with single space
       .trim()
-      .substring(0, 50)
+      .substring(0, 50) // Limit length
       + (text.length > 50 ? '...' : '');
   }
-
-  // NEW: Calculate subtree width recursively
-  function calculateSubtreeWidth(block) {
-    if (!block.children || block.children.length === 0) {
-      return 1; // Leaf nodes have width of 1
-    }
-
-    // Filter children that will actually become nodes
-    const validChildren = block.children.filter(child => {
-      if (!child.content || child.content.trim() === '' || 
-          child.content === '—' || child.content === '[divider]' ||
-          child.type === 'divider' || child.type === 'unsupported') {
-        return false;
-      }
-
-      const content = child.content.trim();
-      return isCondition(content) || isPolicy(content) || 
-             (child.depth === 0 && content.includes('Business ECP:'));
-    });
-
-    if (validChildren.length === 0) {
-      return 1;
-    }
-
-    // Sum up the widths of all child subtrees
-    let totalWidth = 0;
-    for (const child of validChildren) {
-      totalWidth += calculateSubtreeWidth(child);
-    }
-
-    return Math.max(1, totalWidth);
-  }
-
-  // NEW: Layout nodes with proper subtree positioning
-  function layoutNodesWithSubtreePositioning(block, parentId = null, level = 0, subtreeStartX = 0, subtreeWidth = 1) {
-    // Skip empty blocks
+  
+  function createNode(block, parentId = null, level = 0) {
+    // Skip empty blocks, dividers, quotes with just "—", and unsupported blocks
     if (!block.content || 
         block.content.trim() === '' || 
         block.content === '—' || 
@@ -626,22 +646,10 @@ function transformToggleToReactFlow(toggleStructureJson) {
         block.type === 'divider' ||
         block.type === 'unsupported') {
       
-      // Still process children with the same parameters
+      // Still process children
       if (block.children && Array.isArray(block.children)) {
-        const validChildren = block.children.filter(child => {
-          if (!child.content) return false;
-          const content = child.content.trim();
-          return isCondition(content) || isPolicy(content) || 
-                 (child.depth === 0 && content.includes('Business ECP:'));
-        });
-
-        if (validChildren.length > 0) {
-          let currentX = subtreeStartX;
-          for (const child of validChildren) {
-            const childWidth = calculateSubtreeWidth(child);
-            layoutNodesWithSubtreePositioning(child, parentId, level, currentX, childWidth);
-            currentX += childWidth * HORIZONTAL_SPACING;
-          }
+        for (const child of block.children) {
+          createNode(child, parentId, level);
         }
       }
       return null;
@@ -657,12 +665,14 @@ function transformToggleToReactFlow(toggleStructureJson) {
     // Check if this is a Business ECP root node
     if (level === 0 && content.includes('Business ECP:')) {
       shouldCreateNode = true;
+      // Extract the ECP name from patterns like "Business ECP: (→ TyptestECP Name Here ←)"
       let cleanedContent = content
         .replace(/Business ECP:\s*\(?\s*→?\s*/, '')
         .replace(/\s*←?\s*\)?\s*.*$/, '')
         .replace(/â/g, '')
         .trim();
       
+      // If still contains placeholder text, clean it up
       if (cleanedContent.includes('TyptestECP') || cleanedContent.includes('Type')) {
         cleanedContent = cleanedContent.replace(/TyptestECP\s*/, '').replace(/Type.*/, '').trim();
       }
@@ -728,6 +738,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
       const policyTitle = extractPolicyTitle(content, block);
       console.log(`📋 Extracted policy title: "${policyTitle}"`);
       
+      // Always create policy nodes - don't skip any
       shouldCreateNode = true;
       const cleanedContent = cleanText(policyTitle);
       
@@ -755,6 +766,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
       console.log(`✅ Created Policy node: ${nodeData.label}`);
     }
     else {
+      // Log blocks that don't match our patterns
       console.log(`⚠️ Block doesn't match any pattern at level ${level}: "${content.substring(0, 50)}..." (type: ${block.type})`);
     }
     
@@ -764,12 +776,18 @@ function transformToggleToReactFlow(toggleStructureJson) {
       const nodeId = String(nodeIdCounter++);
       currentNodeId = nodeId;
       
-      // NEW: Calculate position based on subtree positioning
-      const y = level * VERTICAL_SPACING;
-      // Center the node within its allocated subtree width
-      const x = subtreeStartX + (subtreeWidth * HORIZONTAL_SPACING - HORIZONTAL_SPACING) / 2;
+      // Initialize level tracking
+      if (!levelPositions.has(level)) {
+        levelPositions.set(level, 0);
+      }
       
-      console.log(`📍 Positioning node ${nodeId} at (${x}, ${y}) with subtree width ${subtreeWidth}`);
+      // Calculate position for top-to-bottom layout
+      const y = level * VERTICAL_SPACING;  // Y increases downward
+      const currentPosAtLevel = levelPositions.get(level);
+      const x = currentPosAtLevel * HORIZONTAL_SPACING; // X for horizontal spacing of siblings
+      
+      // Update level position counter
+      levelPositions.set(level, currentPosAtLevel + 1);
       
       // Create the node
       const node = {
@@ -817,354 +835,303 @@ function transformToggleToReactFlow(toggleStructureJson) {
       }
     }
     
-    // NEW: Process children with proper subtree allocation
+    // Process children recursively
     if (block.children && Array.isArray(block.children)) {
-      const validChildren = block.children.filter(child => {
-        if (!child.content) return false;
-        const content = child.content.trim();
-        return content !== '' && content !== '—' && content !== '[divider]' &&
-               child.type !== 'divider' && child.type !== 'unsupported' &&
-               (isCondition(content) || isPolicy(content) || 
-                (child.depth === 0 && content.includes('Business ECP:')));
-      });
-
-      if (validChildren.length > 0) {
-        console.log(`📊 Processing ${validChildren.length} valid children for node ${nodeId || 'no-node'}`);
-        
-        // Calculate width for each child
-        const childWidths = validChildren.map(child => calculateSubtreeWidth(child));
-        const totalChildWidth = childWidths.reduce((sum, width) => sum + width, 0);
-        
-        console.log(`📏 Child subtree widths: [${childWidths.join(', ')}], total: ${totalChildWidth}`);
-        
-        // Position children to avoid overlap
-        let currentChildX = subtreeStartX;
-        
-        // If we have multiple children, spread them across the available width
-        if (validChildren.length > 1) {
-          // Calculate the total width needed for all children
-          const totalWidthNeeded = totalChildWidth * HORIZONTAL_SPACING;
-          // Start from the left edge of the current subtree
-          currentChildX = subtreeStartX;
-        } else {
-          // Single child - center it under the parent
-          currentChildX = subtreeStartX;
-        }
-        
-        for (let i = 0; i < validChildren.length; i++) {
-          const child = validChildren[i];
-          const childWidth = childWidths[i];
-          
-          console.log(`📍 Laying out child ${i + 1}/${validChildren.length} at x=${currentChildX} with width=${childWidth}`);
-          
-          layoutNodesWithSubtreePositioning(
-            child, 
-            currentNodeId, 
-            level + 1, 
-            currentChildX, 
-            childWidth
-          );
-          
-          // Move to next position
-          currentChildX += childWidth * HORIZONTAL_SPACING;
-        }
+      for (const child of block.children) {
+        createNode(child, currentNodeId || parentId, level + (shouldCreateNode ? 1 : 0));
       }
     }
     
     return currentNodeId;
   }
   
-  // If we didn't create a node but have children, still process them
-  if (!shouldCreateNode && block.children && Array.isArray(block.children)) {
-    const validChildren = block.children.filter(child => {
-      if (!child.content) return false;
-      const content = child.content.trim();
-      return content !== '' && content !== '—' && content !== '[divider]' &&
-             child.type !== 'divider' && child.type !== 'unsupported' &&
-             (isCondition(content) || isPolicy(content) || 
-              (child.depth === 0 && content.includes('Business ECP:')));
-    });
-
-    if (validChildren.length > 0) {
-      let currentChildX = subtreeStartX;
-      for (const child of validChildren) {
-        const childWidth = calculateSubtreeWidth(child);
-        layoutNodesWithSubtreePositioning(child, parentId, level, currentChildX, childWidth);
-        currentChildX += childWidth * HORIZONTAL_SPACING;
+  console.log(`🚀 Starting transformation of toggle structure...`);
+  
+  // Start processing from the root toggle block
+  createNode(toggleStructure.toggleBlock);
+  
+  console.log(`📊 Created ${nodes.length} nodes and ${edges.length} edges`);
+  
+  // Center the layout horizontally if there are nodes
+  if (nodes.length > 0) {
+    // Calculate the center offset for each level
+    const levelWidths = new Map();
+    
+    // Calculate actual width needed for each level
+    nodes.forEach(node => {
+      const level = node.data.depth;
+      if (!levelWidths.has(level)) {
+        levelWidths.set(level, []);
       }
-    }
+      levelWidths.get(level).push(node.position.x);
+    });
+    
+    // Center each level
+    levelWidths.forEach((xPositions, level) => {
+      if (xPositions.length > 1) {
+        const minX = Math.min(...xPositions);
+        const maxX = Math.max(...xPositions);
+        const levelWidth = maxX - minX;
+        const centerOffset = -levelWidth / 2;
+        
+        // Apply centering to nodes at this level
+        nodes.forEach(node => {
+          if (node.data.depth === level) {
+            node.position.x += centerOffset;
+          }
+        });
+      } else if (xPositions.length === 1) {
+        // Single node, center it at x=0
+        nodes.forEach(node => {
+          if (node.data.depth === level) {
+            node.position.x = 0;
+          }
+        });
+      }
+    });
   }
   
-  return null;
-}
-
-console.log(`🚀 Starting transformation of toggle structure with subtree-aware layout...`);
-
-// Calculate the total width of the root tree
-const rootWidth = calculateSubtreeWidth(toggleStructure.toggleBlock);
-console.log(`📐 Root tree width: ${rootWidth} units`);
-
-// Start processing from the root toggle block, centered
-const rootStartX = -(rootWidth * HORIZONTAL_SPACING) / 2;
-layoutNodesWithSubtreePositioning(toggleStructure.toggleBlock, null, 0, rootStartX, rootWidth);
-
-console.log(`📊 Created ${nodes.length} nodes and ${edges.length} edges with subtree-aware positioning`);
-
-// Count node types for metadata
-const nodeTypes = {
-  businessECP: nodes.filter(n => n.data.nodeType === 'businessECP').length,
-  conditions: nodes.filter(n => n.data.nodeType === 'condition').length,
-  policies: nodes.filter(n => n.data.nodeType === 'policy').length,
-  other: nodes.filter(n => !['businessECP', 'condition', 'policy'].includes(n.data.nodeType)).length
-};
-
-console.log(`📈 Node breakdown: ${JSON.stringify(nodeTypes)}`);
-
-// Log positioning for debugging
-console.log(`📍 Node positions:`);
-nodes.forEach(node => {
-  console.log(`  ${node.id}: (${node.position.x}, ${node.position.y}) - ${node.data.label.substring(0, 30)}...`);
-});
-
-return {
-  nodes,
-  edges,
-  metadata: {
-    totalNodes: nodes.length,
-    totalEdges: edges.length,
-    maxDepth: nodes.length > 0 ? Math.max(...nodes.map(n => n.data.depth)) : 0,
-    sourceMetadata: toggleStructure.metadata,
-    nodeTypes: nodeTypes,
-    layout: 'subtree-aware',
-    spacingInfo: {
-      horizontalSpacing: HORIZONTAL_SPACING,
-      verticalSpacing: VERTICAL_SPACING,
-      rootWidth: rootWidth,
-      algorithm: 'subtree-width-calculation'
-    },
-    processingRules: {
-      ignoredEmptyPolicies: true,
-      extractedConditionNumbers: true,
-      cleanedContent: true,
-      subtreePositioning: true,
-      avoidedArrowIntersections: true
+  // Count node types for metadata
+  const nodeTypes = {
+    businessECP: nodes.filter(n => n.data.nodeType === 'businessECP').length,
+    conditions: nodes.filter(n => n.data.nodeType === 'condition').length,
+    policies: nodes.filter(n => n.data.nodeType === 'policy').length,
+    other: nodes.filter(n => !['businessECP', 'condition', 'policy'].includes(n.data.nodeType)).length
+  };
+  
+  console.log(`📈 Node breakdown: ${JSON.stringify(nodeTypes)}`);
+  
+  return {
+    nodes,
+    edges,
+    metadata: {
+      totalNodes: nodes.length,
+      totalEdges: edges.length,
+      maxDepth: nodes.length > 0 ? Math.max(...nodes.map(n => n.data.depth)) : 0,
+      sourceMetadata: toggleStructure.metadata,
+      nodeTypes: nodeTypes,
+      layout: 'topToBottom',
+      processingRules: {
+        ignoredEmptyPolicies: true,
+        extractedConditionNumbers: true,
+        cleanedContent: true,
+        centeredLayout: true,
+        improvedSpacing: true
+      }
     }
-  }
-};
-
+  };
+}
 
 // ===== API ROUTES =====
 
 // Root route for Vercel
 app.get('/', (req, res) => {
-res.json({
-  message: 'Notion Graph Proxy Service - Vercel Deployment',
-  status: 'running',
-  timestamp: new Date().toISOString(),
-  firebase: isFirebaseEnabled ? 'enabled' : 'disabled (using memory)',
-  notion: NOTION_TOKEN ? 'configured' : 'missing',
-  endpoints: [
-    'GET /health',
-    'GET /api/firebase-status', 
-    'POST /api/create-graph',
-    'POST /api/quick-test',
-    'GET /api/graph-data/:pageId'
-  ]
-});
+  res.json({
+    message: 'Notion Graph Proxy Service - Vercel Deployment',
+    status: 'running',
+    timestamp: new Date().toISOString(),
+    firebase: isFirebaseEnabled ? 'enabled' : 'disabled (using memory)',
+    notion: NOTION_TOKEN ? 'configured' : 'missing',
+    endpoints: [
+      'GET /health',
+      'GET /api/firebase-status', 
+      'POST /api/create-graph',
+      'POST /api/quick-test',
+      'GET /api/graph-data/:pageId'
+    ]
+  });
 });
 
 // Health check
 app.get('/health', (req, res) => {
-res.json({
-  status: 'healthy',
-  timestamp: new Date().toISOString(),
-  platform: 'vercel',
-  firebase: isFirebaseEnabled ? 'connected' : 'memory-fallback',
-  notion: NOTION_TOKEN ? 'configured' : 'missing',
-  storage: isFirebaseEnabled ? 'firestore' : 'memory',
-  memoryGraphs: graphStorage.size
-});
+  res.json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    platform: 'vercel',
+    firebase: isFirebaseEnabled ? 'connected' : 'memory-fallback',
+    notion: NOTION_TOKEN ? 'configured' : 'missing',
+    storage: isFirebaseEnabled ? 'firestore' : 'memory',
+    memoryGraphs: graphStorage.size
+  });
 });
 
 // Firebase status
 app.get('/api/firebase-status', (req, res) => {
-res.json({
-  firebase: {
-    enabled: isFirebaseEnabled,
-    status: isFirebaseEnabled ? 'connected' : 'using-memory-fallback',
-    projectId: isFirebaseEnabled ? 'graphfornotion' : null
-  },
-  storage: {
-    type: isFirebaseEnabled ? 'firestore' : 'memory',
-    itemCount: graphStorage.size
-  },
-  platform: 'vercel'
-});
+  res.json({
+    firebase: {
+      enabled: isFirebaseEnabled,
+      status: isFirebaseEnabled ? 'connected' : 'using-memory-fallback',
+      projectId: isFirebaseEnabled ? 'graphfornotion' : null
+    },
+    storage: {
+      type: isFirebaseEnabled ? 'firestore' : 'memory',
+      itemCount: graphStorage.size
+    },
+    platform: 'vercel'
+  });
 });
 
 // Get graph data
 app.get('/api/graph-data/:pageId', async (req, res) => {
-try {
-  const { pageId } = req.params;
-  console.log(`📡 Fetching graph data for: ${pageId}`);
-  
-  const graphData = await getGraphFromFirestore(pageId);
+  try {
+    const { pageId } = req.params;
+    console.log(`📡 Fetching graph data for: ${pageId}`);
+    
+    const graphData = await getGraphFromFirestore(pageId);
 
-  if (!graphData) {
-    return res.status(404).json({
-      error: 'Graph not found',
-      pageId: pageId,
-      storage: isFirebaseEnabled ? 'firebase' : 'memory'
+    if (!graphData) {
+      return res.status(404).json({
+        error: 'Graph not found',
+        pageId: pageId,
+        storage: isFirebaseEnabled ? 'firebase' : 'memory'
+      });
+    }
+
+    res.json({
+      success: true,
+      pageId,
+      storage: graphData.storage || (isFirebaseEnabled ? 'firebase' : 'memory'),
+      ...graphData
+    });
+  } catch (error) {
+    console.error('❌ Error serving graph data:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      details: error.message,
+      platform: 'vercel'
     });
   }
-
-  res.json({
-    success: true,
-    pageId,
-    storage: graphData.storage || (isFirebaseEnabled ? 'firebase' : 'memory'),
-    ...graphData
-  });
-} catch (error) {
-  console.error('❌ Error serving graph data:', error);
-  res.status(500).json({
-    error: 'Internal server error',
-    details: error.message,
-    platform: 'vercel'
-  });
-}
 });
 
 // Create graph - Main API endpoint
 app.post('/api/create-graph', async (req, res) => {
-const startTime = Date.now();
-
-try {
-  const { pageId, text } = req.body;
-
-  if (!pageId || !text) {
-    return res.status(400).json({
-      success: false,
-      error: 'Missing required parameters: pageId and text'
-    });
-  }
-
-  console.log(`🚀 Creating graph for page ${pageId} with text "${text}"`);
-
-  // Extract and transform with timeout protection
-  const toggleStructure = await fetchToggleBlockStructure({ pageId, text });
-  console.log(`✅ Toggle structure extracted in ${Date.now() - startTime}ms`);
+  const startTime = Date.now();
   
-  const graphData = transformToggleToReactFlow(toggleStructure.result);
-  console.log(`✅ Graph transformed: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges`);
-  
-  const cleanedGraphData = sanitizeGraphData(graphData);
-
-  // Store with unique ID
-  const uniquePageId = `notion-${pageId}-${Date.now()}`;
-  await saveGraphToFirestore(uniquePageId, cleanedGraphData);
-  console.log(`✅ Graph stored with ID: ${uniquePageId}`);
-
-  // Generate URL
-  const graphUrl = generateGraphUrl(uniquePageId);
-  console.log(`🔗 Generated graph URL: ${graphUrl}`);
-
-  // ✨ APPEND GRAPH TO NOTION PAGE ✨
   try {
-    const graphTitle = `📊 Process Flow: ${text}`;
-    const appendResult = await appendGraphToNotionPage(pageId, graphUrl, graphTitle);
-    console.log(`✅ Graph successfully added to Notion page`);
+    const { pageId, text } = req.body;
+
+    if (!pageId || !text) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required parameters: pageId and text'
+      });
+    }
+
+    console.log(`🚀 Creating graph for page ${pageId} with text "${text}"`);
+
+    // Extract and transform with timeout protection
+    const toggleStructure = await fetchToggleBlockStructure({ pageId, text });
+    console.log(`✅ Toggle structure extracted in ${Date.now() - startTime}ms`);
     
-    res.json({
-      success: true,
-      graphUrl: graphUrl,
-      graphId: uniquePageId,
-      stats: {
-        nodes: cleanedGraphData.nodes.length,
-        edges: cleanedGraphData.edges.length,
-        storage: isFirebaseEnabled ? 'firebase' : 'memory',
-        processingTimeMs: Date.now() - startTime,
-        layout: 'subtree-aware-positioning'
-      },
-      notionResult: appendResult,
-      message: `✅ Graph created and added to Notion page successfully! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'} Using subtree-aware layout to prevent arrow intersections.`
-    });
+    const graphData = transformToggleToReactFlow(toggleStructure.result);
+    console.log(`✅ Graph transformed: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges`);
     
-  } catch (notionError) {
-    console.error('❌ Failed to add graph to Notion page:', notionError);
+    const cleanedGraphData = sanitizeGraphData(graphData);
+
+    // Store with unique ID
+    const uniquePageId = `notion-${pageId}-${Date.now()}`;
+    await saveGraphToFirestore(uniquePageId, cleanedGraphData);
+    console.log(`✅ Graph stored with ID: ${uniquePageId}`);
+
+    // Generate URL
+    const graphUrl = generateGraphUrl(uniquePageId);
+    console.log(`🔗 Generated graph URL: ${graphUrl}`);
+
+    // ✨ APPEND GRAPH TO NOTION PAGE ✨
+    try {
+      const graphTitle = `📊 Process Flow: ${text}`;
+      const appendResult = await appendGraphToNotionPage(pageId, graphUrl, graphTitle);
+      console.log(`✅ Graph successfully added to Notion page`);
+      
+      res.json({
+        success: true,
+        graphUrl: graphUrl,
+        graphId: uniquePageId,
+        stats: {
+          nodes: cleanedGraphData.nodes.length,
+          edges: cleanedGraphData.edges.length,
+          storage: isFirebaseEnabled ? 'firebase' : 'memory',
+          processingTimeMs: Date.now() - startTime
+        },
+        notionResult: appendResult,
+        message: `✅ Graph created and added to Notion page successfully! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'}`
+      });
+      
+    } catch (notionError) {
+      console.error('❌ Failed to add graph to Notion page:', notionError);
+      
+      // Still return success for graph creation, but note the Notion error
+      res.json({
+        success: true,
+        graphUrl: graphUrl,
+        graphId: uniquePageId,
+        stats: {
+          nodes: cleanedGraphData.nodes.length,
+          edges: cleanedGraphData.edges.length,
+          storage: isFirebaseEnabled ? 'firebase' : 'memory',
+          processingTimeMs: Date.now() - startTime
+        },
+        warning: `Graph created but failed to add to Notion page: ${notionError.message}`,
+        message: `⚠️ Graph created successfully but couldn't add to Notion page. You can access it directly via the URL.`
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Error creating graph:', error);
     
-    // Still return success for graph creation, but note the Notion error
-    res.json({
-      success: true,
-      graphUrl: graphUrl,
-      graphId: uniquePageId,
-      stats: {
-        nodes: cleanedGraphData.nodes.length,
-        edges: cleanedGraphData.edges.length,
-        storage: isFirebaseEnabled ? 'firebase' : 'memory',
-        processingTimeMs: Date.now() - startTime,
-        layout: 'subtree-aware-positioning'
-      },
-      warning: `Graph created but failed to add to Notion page: ${notionError.message}`,
-      message: `⚠️ Graph created successfully but couldn't add to Notion page. You can access it directly via the URL.`
+    let errorMessage = error.message;
+    if (error.message.includes('No toggle')) {
+      errorMessage = `No toggle block found containing "${req.body?.text || 'N/A'}" inside any callout block`;
+    } else if (error.message.includes('No callout')) {
+      errorMessage = 'No callout blocks found in the page. Toggle blocks must be inside callout blocks.';
+    } else if (error.message.includes('timed out')) {
+      errorMessage = 'Request timed out - the toggle structure is too complex for serverless functions';
+    } else if (error.message.includes('Failed to fetch page')) {
+      errorMessage = 'Could not access the Notion page. Check the page ID and permissions.';
+    }
+
+    res.status(500).json({
+      success: false,
+      error: errorMessage,
+      platform: 'vercel',
+      processingTimeMs: Date.now() - startTime
     });
   }
-
-} catch (error) {
-  console.error('❌ Error creating graph:', error);
-  
-  let errorMessage = error.message;
-  if (error.message.includes('No toggle')) {
-    errorMessage = `No toggle block found containing "${req.body?.text || 'N/A'}" inside any callout block`;
-  } else if (error.message.includes('No callout')) {
-    errorMessage = 'No callout blocks found in the page. Toggle blocks must be inside callout blocks.';
-  } else if (error.message.includes('timed out')) {
-    errorMessage = 'Request timed out - the toggle structure is too complex for serverless functions';
-  } else if (error.message.includes('Failed to fetch page')) {
-    errorMessage = 'Could not access the Notion page. Check the page ID and permissions.';
-  }
-
-  res.status(500).json({
-    success: false,
-    error: errorMessage,
-    platform: 'vercel',
-    processingTimeMs: Date.now() - startTime
-  });
-}
 });
 
 // Quick test endpoint
 app.post('/api/quick-test', async (req, res) => {
-try {
-  const testPageId = '2117432eb8438055a473fc7198dc3fdc';
-  const testText = 'Business ECP:';
-  
-  console.log('🧪 Running quick test with hardcoded values...');
-  
-  // Call our own create-graph endpoint
-  const createResponse = await fetch(`${req.protocol}://${req.get('host')}/api/create-graph`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pageId: testPageId, text: testText })
-  });
+  try {
+    const testPageId = '2117432eb8438055a473fc7198dc3fdc';
+    const testText = 'Business ECP:';
+    
+    console.log('🧪 Running quick test with hardcoded values...');
+    
+    // Call our own create-graph endpoint
+    const createResponse = await fetch(`${req.protocol}://${req.get('host')}/api/create-graph`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pageId: testPageId, text: testText })
+    });
 
-  const data = await createResponse.json();
-  
-  res.json({
-    ...data,
-    testMode: true,
-    platform: 'vercel',
-    firebase: isFirebaseEnabled ? 'enabled' : 'memory-fallback'
-  });
+    const data = await createResponse.json();
+    
+    res.json({
+      ...data,
+      testMode: true,
+      platform: 'vercel',
+      firebase: isFirebaseEnabled ? 'enabled' : 'memory-fallback'
+    });
 
-} catch (error) {
-  console.error('❌ Quick test error:', error);
-  res.status(500).json({
-    success: false,
-    error: error.message,
-    testMode: true,
-    platform: 'vercel'
-  });
-}
+  } catch (error) {
+    console.error('❌ Quick test error:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      testMode: true,
+      platform: 'vercel'
+    });
+  }
 });
 
 // Export for Vercel
@@ -1172,10 +1139,10 @@ module.exports = app;
 
 // For local development
 if (require.main === module) {
-const PORT = process.env.PORT || 3002;
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`🔥 Firebase: ${isFirebaseEnabled ? 'Enabled' : 'Memory fallback'}`);
-  console.log(`📝 Notion: ${NOTION_TOKEN ? 'Configured' : 'Missing'}`);
-});
+  const PORT = process.env.PORT || 3002;
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`🔥 Firebase: ${isFirebaseEnabled ? 'Enabled' : 'Memory fallback'}`);
+    console.log(`📝 Notion: ${NOTION_TOKEN ? 'Configured' : 'Missing'}`);
+  });
 }
