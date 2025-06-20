@@ -1,0 +1,1973 @@
+[
+  {
+    "id": "1",
+    "type": "businessECP",
+    "title": "Business ECP:  Current Month Payments Direct Debit",
+    "level": 0,
+    "parentId": null,
+    "notionBlockId": "2117432e-b843-81dc-ad35-c84f49a02e02"
+  },
+  {
+    "id": "2",
+    "type": "condition",
+    "title": "❶ Condition If Untitled = “TRUE“ AND PaymentMethod = “Direct Debit”",
+    "level": 1,
+    "parentId": "1",
+    "notionBlockId": "2117432e-b843-8141-962c-e803b81a0c9d"
+  },
+  {
+    "id": "3",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "",
+    "level": 2,
+    "parentId": "2",
+    "notionBlockId": "2117432e-b843-81fb-9248-dc7c03eb599a"
+  },
+  {
+    "id": "4",
+    "type": "condition",
+    "title": "❷ Condition If SDRRenewal.Status = “Received”",
+    "level": 2,
+    "parentId": "2",
+    "notionBlockId": "2117432e-b843-8080-bce6-c7b66c6c6c36"
+  },
+  {
+    "id": "5",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED Untitled for the 2-year visa renewal which we received on SDRRenewal.ReceivalDate.",
+    "level": 3,
+    "parentId": "4",
+    "notionBlockId": "2117432e-b843-81b9-805d-ec169610e37f"
+  },
+  {
+    "id": "6",
+    "type": "condition",
+    "title": "❷ Condition If SDRRenewal.Status = “Pending collection”",
+    "level": 2,
+    "parentId": "2",
+    "notionBlockId": "2117432e-b843-80d4-9110-cc2a179f2543"
+  },
+  {
+    "id": "7",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED SDRRenewal.Amount for the 2-year visa renewal is still pending. We will deduct the amount within the next 24 hours. Share the following link SDRRenewal.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "6",
+    "notionBlockId": "2117432e-b843-81ae-bdb4-fe31da480c79"
+  },
+  {
+    "id": "8",
+    "type": "condition",
+    "title": "❷ Condition If SDRRenewal.Status = “Rejected / Pending client to sign”",
+    "level": 2,
+    "parentId": "2",
+    "notionBlockId": "2117432e-b843-80ec-a6b0-e3d55bb6e5da"
+  },
+  {
+    "id": "9",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of SDRRenewal.Amount for the 2-year visa renewal was rejected by the bank and is pending the customer’s signature to resubmit the approval to the bank for deduction. Share the following link SDRRenewal.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "8",
+    "notionBlockId": "2117432e-b843-8141-9639-fa250814c8e9"
+  },
+  {
+    "id": "10",
+    "type": "condition",
+    "title": "❷ Condition If SDRRenewal.Status = “Rejected / Pending bank response”",
+    "level": 2,
+    "parentId": "2",
+    "notionBlockId": "2117432e-b843-804c-b877-fe65b5183cdb"
+  },
+  {
+    "id": "11",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of SDRRenewal.Amount for the 2-year visa renewal was rejected by the bank before but we submitted new payment forms to the bank which are awaiting bank approval now. Once the bank approves the payment, we will deduct the amount within the next 24 hours. Share the following link SDRRenewal.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "10",
+    "notionBlockId": "2117432e-b843-8108-bd24-ee28ec3fbf3b"
+  },
+  {
+    "id": "12",
+    "type": "condition",
+    "title": "❷ Condition If SDRRenewal.Status = “Incomplete / Missing signature”",
+    "level": 2,
+    "parentId": "2",
+    "notionBlockId": "2117432e-b843-80f3-88c4-ce4c9964011a"
+  },
+  {
+    "id": "13",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of SDRRenewal.Amount for the 2-year visa renewal is still pending due to missing the customer’s signature and bank information. Share the following link SDRRenewal.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "12",
+    "notionBlockId": "2117432e-b843-8126-a2b9-c649c9681acd"
+  },
+  {
+    "id": "14",
+    "type": "condition",
+    "title": "❷ Condition If SDRRenewal.Status = “Incomplete / Documents rejected (EID, IBAN, etc.)”",
+    "level": 2,
+    "parentId": "2",
+    "notionBlockId": "2117432e-b843-8056-a3a7-cef156c2e6e9"
+  },
+  {
+    "id": "15",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of Untitled for the 2-year visa renewal is still pending due to the following reason: SDRRenewal.Status. Share the following link SDRRenewal.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "14",
+    "notionBlockId": "2117432e-b843-81ff-83f3-fbc3cbbabf05"
+  },
+  {
+    "id": "16",
+    "type": "condition",
+    "title": "❷ Condition If SDRRenewal.Status = “Pending bank approval”",
+    "level": 2,
+    "parentId": "2",
+    "notionBlockId": "2117432e-b843-802c-87ad-d41d1ebd5b07"
+  },
+  {
+    "id": "17",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of SDRRenewal.Amount for the 2-year visa renewal is still pending and currently awaiting initial bank approval. Share the following link SDRRenewal.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "16",
+    "notionBlockId": "2117432e-b843-815a-8009-d6da6d9f6a13"
+  },
+  {
+    "id": "18",
+    "type": "condition",
+    "title": "❷ Condition If SDRRenewal.Status = “Bounced”",
+    "level": 2,
+    "parentId": "2",
+    "notionBlockId": "2117432e-b843-80cc-a90a-ca225a001936"
+  },
+  {
+    "id": "19",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of Untitled for the 2-year visa renewal is bounced due to insufficient funds. We'll try deducting the amount again 3 days after the payment was bounced and the customer should either make sure to add funds to the bank account or the customer can settle the payment via a different credit or debit card through this link SDRRenewal.PaymentLink.",
+    "level": 3,
+    "parentId": "18",
+    "notionBlockId": "2117432e-b843-8124-9835-d4eb6e675635"
+  },
+  {
+    "id": "20",
+    "type": "condition",
+    "title": "❶ Condition If Untitled = “TRUE“ AND PaymentMethod = “Direct Debit”",
+    "level": 1,
+    "parentId": "1",
+    "notionBlockId": "2117432e-b843-802b-ad6f-da257fe28dd8"
+  },
+  {
+    "id": "21",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "",
+    "level": 2,
+    "parentId": "20",
+    "notionBlockId": "2117432e-b843-811f-a45d-cac570ba699e"
+  },
+  {
+    "id": "22",
+    "type": "condition",
+    "title": "❷ Condition IF Untitled = “Received” AND MonthlyPaymentCurrent.PaymentIncludesSalary = “TRUE” AND VATonSalary = “TRUE”",
+    "level": 2,
+    "parentId": "20",
+    "notionBlockId": "2117432e-b843-804e-97c8-edbbd97dde0b"
+  },
+  {
+    "id": "23",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED Untitled which includes WPSProcessingAmount for Maid & Client Support and the maid's salary inclusive of 5% VAT.",
+    "level": 3,
+    "parentId": "22",
+    "notionBlockId": "2117432e-b843-8156-b397-fdf18b9dcd33"
+  },
+  {
+    "id": "24",
+    "type": "condition",
+    "title": "❷ Condition IF Untitled = “Received” AND MonthlyPaymentCurrent.PaymentIncludesSalary = “TRUE” AND VATonSalary  = “FALSE”",
+    "level": 2,
+    "parentId": "20",
+    "notionBlockId": "2117432e-b843-8001-bfcb-cdbb7f12d510"
+  },
+  {
+    "id": "25",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AEDUntitled which includes WPSProcessingAmount for Maid & Client Support and the maid's salary.",
+    "level": 3,
+    "parentId": "24",
+    "notionBlockId": "2117432e-b843-81ce-90c5-e6db8fa31b1e"
+  },
+  {
+    "id": "26",
+    "type": "condition",
+    "title": "❷ Condition IF Untitled = “Received” AND MonthlyPaymentCurrent.PaymentIncludesSalary = “FALSE”",
+    "level": 2,
+    "parentId": "20",
+    "notionBlockId": "2117432e-b843-80da-8b4e-feeabd21026f"
+  },
+  {
+    "id": "27",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED Untitled for Client & Maid Support which we received on MonthlyPaymentCurrent.ReceivalDate.",
+    "level": 3,
+    "parentId": "26",
+    "notionBlockId": "2117432e-b843-8147-8e2a-e9d368325f36"
+  },
+  {
+    "id": "28",
+    "type": "condition",
+    "title": "❷ Condition If Untitled = “Pending collection” AND MonthlyPaymentCurrent.PaymentIncludesSalary = “TRUE” AND VATonSalary = “TRUE”",
+    "level": 2,
+    "parentId": "20",
+    "notionBlockId": "2117432e-b843-8098-b46b-f41fe4f55bf6"
+  },
+  {
+    "id": "29",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED Untitled which includes WPSProcessingAmount for Maid & Client Support and the maid's salary inclusive of 5% VAT is still pending. We will deduct the amount within the next 24 hours. Share the following link MonthlyPaymentCurrent.PaymentLink with the customer and explain that since the monthly bank forms are approved, there’s a chance the bank might still deduct the payment before we can stop it, which could lead to a double deduction. Explain that in case a double deduction occurred, we will automatically refund one of the payments only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "28",
+    "notionBlockId": "2117432e-b843-8133-87b2-dc9bc4b5b821"
+  },
+  {
+    "id": "30",
+    "type": "condition",
+    "title": "❷ Condition If Untitled = “Pending collection” AND MonthlyPaymentCurrent.PaymentIncludesSalary = “TRUE” AND VATonSalary = “FALSE”",
+    "level": 2,
+    "parentId": "20",
+    "notionBlockId": "2117432e-b843-8071-8b46-e0740612cc40"
+  },
+  {
+    "id": "31",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED Untitled which includes WPSProcessingAmount for Maid & Client Support and the maid's salary is still pending. We will deduct the amount within the next 24 hours. Share the following link MonthlyPaymentCurrent.PaymentLinkwith the customer and explain that since the monthly bank forms are approved, there’s a chance the bank might still deduct the payment before we can stop it, which could lead to a double deduction. Explain that in case a double deduction occurred, we will automatically refund one of the payments only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "30",
+    "notionBlockId": "2117432e-b843-815f-befa-ea0bff587fd5"
+  },
+  {
+    "id": "32",
+    "type": "condition",
+    "title": "❷ Condition If Untitled = “Pending collection” AND MonthlyPaymentCurrent.PaymentIncludesSalary = “FALSE”",
+    "level": 2,
+    "parentId": "20",
+    "notionBlockId": "2117432e-b843-80dc-a674-c5796947d2be"
+  },
+  {
+    "id": "33",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED WPSProcessingAmount for Client & Maid Support is still pending. We will deduct the amount within the next 24 hours. Share the following link MonthlyPaymentCurrent.PaymentLink with the customer and explain that since the monthly bank forms are approved, there’s a chance the bank might still deduct the payment before we can stop it, which could lead to a double deduction. Explain that in case a double deduction occurred, we will automatically refund one of the payments only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "32",
+    "notionBlockId": "2117432e-b843-811d-b244-ef22eb53a1f7"
+  },
+  {
+    "id": "34",
+    "type": "condition",
+    "title": "❷ Condition If Untitled = “Rejected / Pending client to sign” AND MonthlyPaymentCurrent.PaymentIncludesSalary = “TRUE” AND VATonSalary = “TRUE”",
+    "level": 2,
+    "parentId": "20",
+    "notionBlockId": "2117432e-b843-8075-921d-cdd73684a175"
+  },
+  {
+    "id": "35",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED Untitled which includes WPSProcessingAmount for Maid & Client Support and the maid's salary inclusive of 5% VAT was rejected by the bank and is pending the customer’s signature to resubmit the approval to the bank for deduction. Share the following link MonthlyPaymentCurrent.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "34",
+    "notionBlockId": "2117432e-b843-81e9-8de0-d298de9470bf"
+  },
+  {
+    "id": "36",
+    "type": "condition",
+    "title": "❷ Condition If Untitled = “Rejected / Pending client to sign” AND MonthlyPaymentCurrent.PaymentIncludesSalary = “TRUE” AND VATonSalary= “FALSE”",
+    "level": 2,
+    "parentId": "20",
+    "notionBlockId": "2117432e-b843-803e-aefe-f31ca3aea893"
+  },
+  {
+    "id": "37",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED Untitled which includes WPSProcessingAmount for Maid & Client Support and the maid's salary was rejected by the bank and is pending the customer’s signature to resubmit the approval to the bank for deduction. Share the following link MonthlyPaymentCurrent.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "36",
+    "notionBlockId": "2117432e-b843-812c-afdd-e168131674e1"
+  },
+  {
+    "id": "38",
+    "type": "condition",
+    "title": "❷ Condition If Untitled = “Rejected / Pending client to sign” AND MonthlyPaymentCurrent.PaymentIncludesSalary = “FALSE”",
+    "level": 2,
+    "parentId": "20",
+    "notionBlockId": "2117432e-b843-8099-9a83-cd74755d0954"
+  },
+  {
+    "id": "39",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of WPSProcessingAmount for Client & Maid Support.was rejected by the bank and is pending the customer’s signature to resubmit the approval to the bank for deduction. Share the following link MonthlyPaymentCurrent.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "38",
+    "notionBlockId": "2117432e-b843-8101-a094-d9782e353d20"
+  },
+  {
+    "id": "40",
+    "type": "condition",
+    "title": "❷ Condition If Untitled = “Rejected / Pending bank response” AND MonthlyPaymentCurrent.PaymentIncludesSalary = “TRUE” AND VATonSalary = “TRUE”",
+    "level": 2,
+    "parentId": "20",
+    "notionBlockId": "2117432e-b843-80ef-8f5e-d1c03f7e3947"
+  },
+  {
+    "id": "41",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED Untitled which includes WPSProcessingAmount for Maid & Client Support and the maid's salary inclusive of 5% VAT was rejected by the bank before but we submitted new payment forms to the bank which are awaiting bank approval now. Once the bank approves the payment, we will deduct the amount within the next 24 hours. Share the following link MonthlyPaymentCurrent.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "40",
+    "notionBlockId": "2117432e-b843-8181-99c2-c947dd848435"
+  },
+  {
+    "id": "42",
+    "type": "condition",
+    "title": "❷ Condition If Untitled = “Rejected / Pending bank response” AND MonthlyPaymentCurrent.PaymentIncludesSalary = “TRUE” AND VATonSalary = “FALSE”",
+    "level": 2,
+    "parentId": "20",
+    "notionBlockId": "2117432e-b843-804a-b850-f4ecd89d29d3"
+  },
+  {
+    "id": "43",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED Untitled which includes WPSProcessingAmount for Maid & Client Support and the maid's salary was rejected by the bank before but we submitted new payment forms to the bank which are awaiting bank approval now. Once the bank approves the payment, we will deduct the amount within the next 24 hours. Share the following link MonthlyPaymentCurrent.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "42",
+    "notionBlockId": "2117432e-b843-81b6-ae00-e254e7e5cb31"
+  },
+  {
+    "id": "44",
+    "type": "condition",
+    "title": "❷ Condition If Untitled = “Rejected / Pending bank response” AND MonthlyPaymentCurrent.PaymentIncludesSalary = “FALSE”",
+    "level": 2,
+    "parentId": "20",
+    "notionBlockId": "2117432e-b843-8005-a57f-e39f1c2738db"
+  },
+  {
+    "id": "45",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of WPSProcessingAmount for Client & Maid Support was rejected by the bank before but we submitted new payment forms to the bank which are awaiting bank approval now. Once the bank approves the payment, we will deduct the amount within the next 24 hours. Share the following link MonthlyPaymentCurrent.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "44",
+    "notionBlockId": "2117432e-b843-81d0-bc83-e894bc790ccb"
+  },
+  {
+    "id": "46",
+    "type": "condition",
+    "title": "❷ Condition If Untitled = “Incomplete / Missing signature” AND MonthlyPaymentCurrent.PaymentIncludesSalary = “TRUE” AND VATonSalary = “TRUE”",
+    "level": 2,
+    "parentId": "20",
+    "notionBlockId": "2117432e-b843-8039-89a1-cdffcf01527f"
+  },
+  {
+    "id": "47",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED Untitled which includes WPSProcessingAmount for Maid & Client Support and the maid's salary inclusive of 5% VAT is still pending due to missing the customer’s signature and bank information. Share the following link MonthlyPaymentCurrent.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "46",
+    "notionBlockId": "2117432e-b843-817e-85e6-d15fa1a98b3e"
+  },
+  {
+    "id": "48",
+    "type": "condition",
+    "title": "❷ Condition If Untitled = “Incomplete / Missing signature” AND MonthlyPaymentCurrent.PaymentIncludesSalary = “TRUE” AND VATonSalary = “FALSE”",
+    "level": 2,
+    "parentId": "20",
+    "notionBlockId": "2117432e-b843-80a3-941e-e8abe3b6c9ca"
+  },
+  {
+    "id": "49",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED Untitled which includes WPSProcessingAmount for Maid & Client Support and the maid's salary is still pending due to missing the customer’s signature and bank information. Share the following link MonthlyPaymentCurrent.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "48",
+    "notionBlockId": "2117432e-b843-81fb-b436-c90acbb5b14e"
+  },
+  {
+    "id": "50",
+    "type": "condition",
+    "title": "❷ Condition If Untitled = “Incomplete / Missing signature” AND MonthlyPaymentCurrent.PaymentIncludesSalary = “FALSE”",
+    "level": 2,
+    "parentId": "20",
+    "notionBlockId": "2117432e-b843-80c0-b78f-f041847b4146"
+  },
+  {
+    "id": "51",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of WPSProcessingAmount for Client & Maid Support is still pending due to missing the customer’s signature and bank information. Share the following link MonthlyPaymentCurrent.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "50",
+    "notionBlockId": "2117432e-b843-812e-beeb-e36ff841b3b5"
+  },
+  {
+    "id": "52",
+    "type": "condition",
+    "title": "❷ Condition If Untitled = “Incomplete / Documents rejected (EID, IBAN, etc.)” AND MonthlyPaymentCurrent.PaymentIncludesSalary = “TRUE” AND VATonSalary = “TRUE”",
+    "level": 2,
+    "parentId": "20",
+    "notionBlockId": "2117432e-b843-8011-bbc9-c63cdde876ca"
+  },
+  {
+    "id": "53",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED Untitled which includes Untitled for Maid & Client Support and the maid's salary inclusive of 5% VAT is still pending due to the following reason: MonthlyPaymentCurrent.Status. Share the following link MonthlyPaymentCurrent.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "52",
+    "notionBlockId": "2117432e-b843-81d4-af31-c18cf22f3574"
+  },
+  {
+    "id": "54",
+    "type": "condition",
+    "title": "❷ Condition If Untitled = “Incomplete / Documents rejected (EID, IBAN, etc.)” AND MonthlyPaymentCurrent.PaymentIncludesSalary = “TRUE” AND VATonSalary = “FALSE”",
+    "level": 2,
+    "parentId": "20",
+    "notionBlockId": "2117432e-b843-8035-8061-c6a471d3d077"
+  },
+  {
+    "id": "55",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED Untitled which includes Untitled for Maid & Client Support and the maid's salary is still pending due to the following reason: MonthlyPaymentCurrent.Status. Share the following link MonthlyPaymentCurrent.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "54",
+    "notionBlockId": "2117432e-b843-81a4-bf09-e10d92ceed57"
+  },
+  {
+    "id": "56",
+    "type": "condition",
+    "title": "❷ Condition If Untitled = “Incomplete / Documents rejected (EID, IBAN, etc.)” AND MonthlyPaymentCurrent.PaymentIncludesSalary = “FALSE”",
+    "level": 2,
+    "parentId": "20",
+    "notionBlockId": "2117432e-b843-8059-ad32-eb0349ba38ef"
+  },
+  {
+    "id": "57",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of Untitled for Client & Maid Support is still pending due to the following reason: MonthlyPaymentCurrent.Status. Share the following link MonthlyPaymentCurrent.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "56",
+    "notionBlockId": "2117432e-b843-8105-ac0b-e50162cb4be5"
+  },
+  {
+    "id": "58",
+    "type": "condition",
+    "title": "❷ Condition If Untitled = “Pending bank approval” AND MonthlyPaymentCurrent.PaymentIncludesSalary = “TRUE” AND VATonSalary = “TRUE”",
+    "level": 2,
+    "parentId": "20",
+    "notionBlockId": "2117432e-b843-80eb-8228-c5551eccd0af"
+  },
+  {
+    "id": "59",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED Untitled which includes WPSProcessingAmount for Maid & Client Support and the maid's salary inclusive of 5% VAT is still pending and currently awaiting initial bank approval. Share the following link MonthlyPaymentCurrent.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "58",
+    "notionBlockId": "2117432e-b843-8142-a24e-cbe7edddf84c"
+  },
+  {
+    "id": "60",
+    "type": "condition",
+    "title": "❷ Condition If Untitled = “Pending bank approval” AND MonthlyPaymentCurrent.PaymentIncludesSalary = “TRUE” AND VATonSalary = “FALSE”",
+    "level": 2,
+    "parentId": "20",
+    "notionBlockId": "2117432e-b843-8038-9013-ff9996c2c9fa"
+  },
+  {
+    "id": "61",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED Untitled which includes WPSProcessingAmount for Maid & Client Support and the maid's salary is still pending and currently awaiting initial bank approval. Share the following link MonthlyPaymentCurrent.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "60",
+    "notionBlockId": "2117432e-b843-81bb-8dbe-e15a56ea5d02"
+  },
+  {
+    "id": "62",
+    "type": "condition",
+    "title": "❷ Condition If Untitled = “Pending bank approval” AND MonthlyPaymentCurrent.PaymentIncludesSalary = “FALSE”",
+    "level": 2,
+    "parentId": "20",
+    "notionBlockId": "2117432e-b843-8023-aabe-e88898feb947"
+  },
+  {
+    "id": "63",
+    "type": "condition",
+    "title": "❷ Condition If Untitled = “Bounced” AND MonthlyPaymentCurrent.PaymentIncludesSalary = “TRUE” AND VATonSalary = “TRUE”",
+    "level": 2,
+    "parentId": "20",
+    "notionBlockId": "2117432e-b843-8092-a7d5-dfc38a43dcf2"
+  },
+  {
+    "id": "64",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED Untitled which includes Untitled for Maid & Client Support and the maid's salary inclusive of 5% VAT is bounced due to insufficient funds. We'll try deducting the amount again 3 days after the payment was bounced and the customer should either make sure to add funds to the bank account or the customer can settle the payment via a different credit or debit card through this link MonthlyPaymentCurrent.PaymentLink.",
+    "level": 3,
+    "parentId": "63",
+    "notionBlockId": "2117432e-b843-81b0-9a70-d881d16368c1"
+  },
+  {
+    "id": "65",
+    "type": "condition",
+    "title": "❷ Condition If Untitled = “Bounced” AND MonthlyPaymentCurrent.PaymentIncludesSalary = “TRUE” AND VATonSalary = “FALSE”",
+    "level": 2,
+    "parentId": "20",
+    "notionBlockId": "2117432e-b843-8007-af07-d0887180d768"
+  },
+  {
+    "id": "66",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED Untitled which includes Untitled for Maid & Client Support and the maid's salary is bounced due to insufficient funds. We'll try deducting the amount again 3 days after the payment was bounced and the customer should either make sure to add funds to the bank account or the customer can settle the payment via a different credit or debit card through this link MonthlyPaymentCurrent.PaymentLink.",
+    "level": 3,
+    "parentId": "65",
+    "notionBlockId": "2117432e-b843-8162-9693-d96bbcc8d709"
+  },
+  {
+    "id": "67",
+    "type": "condition",
+    "title": "❷ Condition If Untitled = “Bounced” AND MonthlyPaymentCurrent.PaymentIncludesSalary = “FALSE”",
+    "level": 2,
+    "parentId": "20",
+    "notionBlockId": "2117432e-b843-8053-8c1a-ffcb79af2a5c"
+  },
+  {
+    "id": "68",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of Untitled for Client & Maid Support is bounced due to insufficient funds. We'll try deducting the amount again 3 days after the payment was bounced and the customer should either make sure to add funds to the bank account or the customer can settle the payment via a different credit or debit card through this link MonthlyPaymentCurrent.PaymentLink.",
+    "level": 3,
+    "parentId": "67",
+    "notionBlockId": "2117432e-b843-818a-aa81-d0ad6db9ac2d"
+  },
+  {
+    "id": "69",
+    "type": "condition",
+    "title": "❶ Condition If Insurance.isDue = “TRUE“ AND PaymentMethod = “Direct Debit”",
+    "level": 1,
+    "parentId": "1",
+    "notionBlockId": "2117432e-b843-80b6-b5f1-d2510d446c06"
+  },
+  {
+    "id": "70",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "",
+    "level": 2,
+    "parentId": "69",
+    "notionBlockId": "2117432e-b843-81af-bc61-f2ffd224e10a"
+  },
+  {
+    "id": "71",
+    "type": "condition",
+    "title": "❷ Condition If Insurance.Status = “Received”",
+    "level": 2,
+    "parentId": "69",
+    "notionBlockId": "2117432e-b843-807a-b39d-db3d29cc65d5"
+  },
+  {
+    "id": "72",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED Untitled for insurance renewal which we received on Insurance.ReceivalDate.",
+    "level": 3,
+    "parentId": "71",
+    "notionBlockId": "2117432e-b843-8129-9f25-cf3953c73977"
+  },
+  {
+    "id": "73",
+    "type": "condition",
+    "title": "❷ Condition If Insurance.Status = “Pending collection”",
+    "level": 2,
+    "parentId": "69",
+    "notionBlockId": "2117432e-b843-80f3-9145-ee53287c9e8c"
+  },
+  {
+    "id": "74",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED Insurance.Amount for insurance renewal is still pending. We will deduct the amount within the next 24 hours. Share the following link Insurance.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "73",
+    "notionBlockId": "2117432e-b843-810c-a3c7-fb1415fd1f66"
+  },
+  {
+    "id": "75",
+    "type": "condition",
+    "title": "❷ Condition If Insurance.Status = “Rejected / Pending client to sign”",
+    "level": 2,
+    "parentId": "69",
+    "notionBlockId": "2117432e-b843-80d3-8cd7-e51127ce5bf8"
+  },
+  {
+    "id": "76",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of Insurance.Amount for insurance renewal was rejected by the bank and is pending the customer’s signature to resubmit the approval to the bank for deduction. Share the following link Insurance.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "75",
+    "notionBlockId": "2117432e-b843-81c3-bc56-e4834e0cc281"
+  },
+  {
+    "id": "77",
+    "type": "condition",
+    "title": "❷ Condition If Insurance.Status = “Rejected / Pending bank response”",
+    "level": 2,
+    "parentId": "69",
+    "notionBlockId": "2117432e-b843-803d-b172-dd9a5a2fdfac"
+  },
+  {
+    "id": "78",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of Insurance.Amount for insurance renewal was rejected by the bank before but we submitted new payment forms to the bank which are awaiting bank approval now. Once the bank approves the payment, we will deduct the amount within the next 24 hours. Share the following link Insurance.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "77",
+    "notionBlockId": "2117432e-b843-8196-8ef6-c21b36174af2"
+  },
+  {
+    "id": "79",
+    "type": "condition",
+    "title": "❷ Condition If Insurance.Status = “Incomplete / Missing signature”",
+    "level": 2,
+    "parentId": "69",
+    "notionBlockId": "2117432e-b843-805e-b9d2-d68faec89231"
+  },
+  {
+    "id": "80",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of Insurance.Amount for insurance renewal is still pending due to missing the customer’s signature and bank information. Share the following link Insurance.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "79",
+    "notionBlockId": "2117432e-b843-810e-941d-df2fd010d7a4"
+  },
+  {
+    "id": "81",
+    "type": "condition",
+    "title": "❷ Condition If Insurance.Status = “Incomplete / Documents rejected (EID, IBAN, etc.)”",
+    "level": 2,
+    "parentId": "69",
+    "notionBlockId": "2117432e-b843-8054-bb14-e1a8d3d4ced1"
+  },
+  {
+    "id": "82",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of Untitled for insurance renewal is still pending due to the following reason: Insurance.Status. Share the following link Insurance.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "81",
+    "notionBlockId": "2117432e-b843-81f8-bd87-c254249bb56b"
+  },
+  {
+    "id": "83",
+    "type": "condition",
+    "title": "❷ Condition If Insurance.Status = “Pending bank approval”",
+    "level": 2,
+    "parentId": "69",
+    "notionBlockId": "2117432e-b843-80fa-974f-cb8df91ed2f0"
+  },
+  {
+    "id": "84",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of Insurance.Amount for insurance renewal is still pending and currently awaiting initial bank approval. Share the following link Insurance.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "83",
+    "notionBlockId": "2117432e-b843-8163-ad1f-e6e1b47b6204"
+  },
+  {
+    "id": "85",
+    "type": "condition",
+    "title": "❷ Condition If Insurance.Status = “Bounced”",
+    "level": 2,
+    "parentId": "69",
+    "notionBlockId": "2117432e-b843-80bf-bb99-cd16e6cde592"
+  },
+  {
+    "id": "86",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of Untitled for insurance renewal is bounced due to insufficient funds. We'll try deducting the amount again 3 days after the payment was bounced and the customer should either make sure to add funds to the bank account or the customer can settle the payment via a different credit or debit card through this link Insurance.PaymentLink.",
+    "level": 3,
+    "parentId": "85",
+    "notionBlockId": "2117432e-b843-8197-8336-fe9810eb0584"
+  },
+  {
+    "id": "87",
+    "type": "condition",
+    "title": "❶ Condition If Untitled = “TRUE“ AND PaymentMethod = “Direct Debit”",
+    "level": 1,
+    "parentId": "1",
+    "notionBlockId": "2117432e-b843-8051-aab6-c0007ffb3ae9"
+  },
+  {
+    "id": "88",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "",
+    "level": 2,
+    "parentId": "87",
+    "notionBlockId": "2117432e-b843-81c0-b96c-ebaf93b2f0dc"
+  },
+  {
+    "id": "89",
+    "type": "condition",
+    "title": "❷ Condition If SDR.Status = “Received”",
+    "level": 2,
+    "parentId": "87",
+    "notionBlockId": "2117432e-b843-8029-a7af-c97b1b5d8f29"
+  },
+  {
+    "id": "90",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED Untitled for the 2-year visa which we received on SDR.ReceivalDate.",
+    "level": 3,
+    "parentId": "89",
+    "notionBlockId": "2117432e-b843-8132-be7c-eb43c0a386f1"
+  },
+  {
+    "id": "91",
+    "type": "condition",
+    "title": "❷ Condition If SDR.Status = “Pending collection”",
+    "level": 2,
+    "parentId": "87",
+    "notionBlockId": "2117432e-b843-8077-aae3-eaa60e327444"
+  },
+  {
+    "id": "92",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "",
+    "level": 3,
+    "parentId": "91",
+    "notionBlockId": "2117432e-b843-8156-b2e5-e432bea689e9"
+  },
+  {
+    "id": "93",
+    "type": "condition",
+    "title": "❷ Condition If SDR.Status = “Rejected / Pending client to sign”",
+    "level": 2,
+    "parentId": "87",
+    "notionBlockId": "2117432e-b843-803e-885a-e1bc4912b8a6"
+  },
+  {
+    "id": "94",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of SDR.Amount for the 2-year visa was rejected by the bank and is pending the customer’s signature to resubmit the approval to the bank for deduction. Share the following link SDR.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "93",
+    "notionBlockId": "2117432e-b843-810d-aa5e-c50b715ee03e"
+  },
+  {
+    "id": "95",
+    "type": "condition",
+    "title": "❷ Condition If SDR.Status = “Rejected / Pending bank response”",
+    "level": 2,
+    "parentId": "87",
+    "notionBlockId": "2117432e-b843-80cb-a30d-fa0178b3536e"
+  },
+  {
+    "id": "96",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of SDR.Amount for the 2-year visa was rejected by the bank before but we submitted new payment forms to the bank which are awaiting bank approval now. Once the bank approves the payment, we will deduct the amount within the next 24 hours. Share the following link SDR.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "95",
+    "notionBlockId": "2117432e-b843-8124-99c3-cd2f75e9a281"
+  },
+  {
+    "id": "97",
+    "type": "condition",
+    "title": "❷ Condition If SDR.Status = “Incomplete / Missing signature”",
+    "level": 2,
+    "parentId": "87",
+    "notionBlockId": "2117432e-b843-8032-992f-c665dfec6532"
+  },
+  {
+    "id": "98",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of SDR.Amount for the 2-year visa is still pending due to missing the customer’s signature and bank information. Share the following link SDR.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "97",
+    "notionBlockId": "2117432e-b843-8134-9ee2-dd9e04e0fc55"
+  },
+  {
+    "id": "99",
+    "type": "condition",
+    "title": "❷ Condition If SDR.Status = “Incomplete / Documents rejected (EID, IBAN, etc.)”",
+    "level": 2,
+    "parentId": "87",
+    "notionBlockId": "2117432e-b843-8069-8fe2-c8d361aae140"
+  },
+  {
+    "id": "100",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of Untitled for the 2-year visa is still pending due to the following reason: SDR.Status. Share the following link SDR.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "99",
+    "notionBlockId": "2117432e-b843-8125-9a32-f418c2375b59"
+  },
+  {
+    "id": "101",
+    "type": "condition",
+    "title": "❷ Condition If SDR.Status = “Pending bank approval”",
+    "level": 2,
+    "parentId": "87",
+    "notionBlockId": "2117432e-b843-8075-9d5a-edc99d33d10d"
+  },
+  {
+    "id": "102",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of SDR.Amount for the 2-year visa is still pending and currently awaiting initial bank approval. Share the following link SDR.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "101",
+    "notionBlockId": "2117432e-b843-8124-b6fd-d6120403263f"
+  },
+  {
+    "id": "103",
+    "type": "condition",
+    "title": "❷ Condition If SDR.Status = “Bounced”",
+    "level": 2,
+    "parentId": "87",
+    "notionBlockId": "2117432e-b843-8056-9c20-d875e855200a"
+  },
+  {
+    "id": "104",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of Untitled for the 2-year visa is bounced due to insufficient funds. We'll try deducting the amount again 3 days after the payment was bounced and the customer should either make sure to add funds to the bank account or the customer can settle the payment via a different credit or debit card through this link SDR.PaymentLink.",
+    "level": 3,
+    "parentId": "103",
+    "notionBlockId": "2117432e-b843-81d8-8412-f75a60411ba4"
+  },
+  {
+    "id": "105",
+    "type": "condition",
+    "title": "❶ Condition If Untitled = “TRUE“ AND PaymentMethod = “Direct Debit”",
+    "level": 1,
+    "parentId": "1",
+    "notionBlockId": "2117432e-b843-8003-aa2b-ff31d9ab5310"
+  },
+  {
+    "id": "106",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "",
+    "level": 2,
+    "parentId": "105",
+    "notionBlockId": "2117432e-b843-8120-8bbd-e987013274a8"
+  },
+  {
+    "id": "107",
+    "type": "condition",
+    "title": "❷ Condition If SDR1.Status = “Received”",
+    "level": 2,
+    "parentId": "105",
+    "notionBlockId": "2117432e-b843-804d-9dd1-cc37c40a1dc8"
+  },
+  {
+    "id": "108",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED Untitled for the first installment of the 2-year visa which we received on SDR1.ReceivalDate.",
+    "level": 3,
+    "parentId": "107",
+    "notionBlockId": "2117432e-b843-8137-bb30-e0aaefce2e0a"
+  },
+  {
+    "id": "109",
+    "type": "condition",
+    "title": "❷ Condition If SDR1.Status = “Pending collection”",
+    "level": 2,
+    "parentId": "105",
+    "notionBlockId": "2117432e-b843-806d-95e3-d7edf40b180f"
+  },
+  {
+    "id": "110",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED SDR1.Amount for the first installment of the 2-year visa is still pending. We will deduct the amount within the next 24 hours. Share the following link SDR1.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "109",
+    "notionBlockId": "2117432e-b843-8165-a54c-d19cbc414d96"
+  },
+  {
+    "id": "111",
+    "type": "condition",
+    "title": "❷ Condition If SDR1.Status = “Rejected / Pending client to sign”",
+    "level": 2,
+    "parentId": "105",
+    "notionBlockId": "2117432e-b843-803f-904c-c6731987668f"
+  },
+  {
+    "id": "112",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of SDR1.Amount for the first installment of the 2-year visa was rejected by the bank and is pending the customer’s signature to resubmit the approval to the bank for deduction. Share the following link SDR1.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "111",
+    "notionBlockId": "2117432e-b843-81c0-ae02-f80580419a8f"
+  },
+  {
+    "id": "113",
+    "type": "condition",
+    "title": "❷ Condition If SDR1.Status = “Rejected / Pending bank response”",
+    "level": 2,
+    "parentId": "105",
+    "notionBlockId": "2117432e-b843-8093-8120-ec23766383a0"
+  },
+  {
+    "id": "114",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of SDR1.Amount for the first installment of the 2-year visa was rejected by the bank before but we submitted new payment forms to the bank which are awaiting bank approval now. Once the bank approves the payment, we will deduct the amount within the next 24 hours. Share the following link SDR1.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "113",
+    "notionBlockId": "2117432e-b843-8194-baa3-ca1d2006d4d7"
+  },
+  {
+    "id": "115",
+    "type": "condition",
+    "title": "❷ Condition If SDR1.Status = “Incomplete / Missing signature”",
+    "level": 2,
+    "parentId": "105",
+    "notionBlockId": "2117432e-b843-8010-b371-e21e16782304"
+  },
+  {
+    "id": "116",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of SDR1.Amount for the first installment of the 2-year visa is still pending due to missing the customer’s signature and bank information. Share the following link SDR1.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "115",
+    "notionBlockId": "2117432e-b843-811c-bda3-f79c6fa0cd2b"
+  },
+  {
+    "id": "117",
+    "type": "condition",
+    "title": "❷ Condition If SDR1.Status = “Incomplete / Documents rejected (EID, IBAN, etc.)”",
+    "level": 2,
+    "parentId": "105",
+    "notionBlockId": "2117432e-b843-8081-aabd-c9a316433612"
+  },
+  {
+    "id": "118",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of Untitled for the first installment of the 2-year visa is still pending due to the following reason: SDR1.Status. Share the following link SDR1.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "117",
+    "notionBlockId": "2117432e-b843-8182-93ad-f2f88111c089"
+  },
+  {
+    "id": "119",
+    "type": "condition",
+    "title": "❷ Condition If SDR1.Status = “Pending bank approval”",
+    "level": 2,
+    "parentId": "105",
+    "notionBlockId": "2117432e-b843-80a6-9966-da6aad675ce3"
+  },
+  {
+    "id": "120",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of SDR1.Amount for the first installment of the 2-year visa is still pending and currently awaiting initial bank approval. Share the following link SDR1.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "119",
+    "notionBlockId": "2117432e-b843-8130-ba57-ce26aaec8e7d"
+  },
+  {
+    "id": "121",
+    "type": "condition",
+    "title": "❷ Condition If SDR1.Status = “Bounced”",
+    "level": 2,
+    "parentId": "105",
+    "notionBlockId": "2117432e-b843-8027-bd4d-ca6912212da3"
+  },
+  {
+    "id": "122",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of Untitled for the first installment of the 2-year visa is bounced due to insufficient funds. We'll try deducting the amount again 3 days after the payment was bounced and the customer should either make sure to add funds to the bank account or the customer can settle the payment via a different credit or debit card through this link SDR1.PaymentLink.",
+    "level": 3,
+    "parentId": "121",
+    "notionBlockId": "2117432e-b843-814e-84a1-fd71f80deee8"
+  },
+  {
+    "id": "123",
+    "type": "condition",
+    "title": "❶ Condition If Untitled = “TRUE“ AND PaymentMethod = “Direct Debit”",
+    "level": 1,
+    "parentId": "1",
+    "notionBlockId": "2117432e-b843-8094-bda8-c57a977ba09d"
+  },
+  {
+    "id": "124",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "",
+    "level": 2,
+    "parentId": "123",
+    "notionBlockId": "2117432e-b843-81b5-aef6-f4621bfc613a"
+  },
+  {
+    "id": "125",
+    "type": "condition",
+    "title": "❷ Condition If SDR2.Status = “Received”",
+    "level": 2,
+    "parentId": "123",
+    "notionBlockId": "2117432e-b843-802f-8626-d817ec0f9309"
+  },
+  {
+    "id": "126",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED Untitled for the second installment of the 2-year visa which we received on SDR2.ReceivalDate.",
+    "level": 3,
+    "parentId": "125",
+    "notionBlockId": "2117432e-b843-8132-930a-eecaea1fede6"
+  },
+  {
+    "id": "127",
+    "type": "condition",
+    "title": "❷ Condition If SDR2.Status  = “Pending collection”",
+    "level": 2,
+    "parentId": "123",
+    "notionBlockId": "2117432e-b843-807a-9007-ed705a98c6c4"
+  },
+  {
+    "id": "128",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED SDR2.Amount for the second installment of the 2-year visa is still pending. We will deduct the amount within the next 24 hours. Share the following link SDR2.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "127",
+    "notionBlockId": "2117432e-b843-812d-97ac-e4efacc8db3d"
+  },
+  {
+    "id": "129",
+    "type": "condition",
+    "title": "❷ Condition If SDR2.Status = “Rejected / Pending client to sign”",
+    "level": 2,
+    "parentId": "123",
+    "notionBlockId": "2117432e-b843-805b-a8bf-f1cf010f0310"
+  },
+  {
+    "id": "130",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of SDR2.Amount for the second installment of the 2-year visa was rejected by the bank and is pending the customer’s signature to resubmit the approval to the bank for deduction. Share the following link SDR2.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "129",
+    "notionBlockId": "2117432e-b843-81be-ba3b-c79855ff9896"
+  },
+  {
+    "id": "131",
+    "type": "condition",
+    "title": "❷ Condition If SDR2.Status = “Rejected / Pending bank response”",
+    "level": 2,
+    "parentId": "123",
+    "notionBlockId": "2117432e-b843-8018-be68-d878361ba92e"
+  },
+  {
+    "id": "132",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of SDR2.Amount for the second installment of the 2-year visa was rejected by the bank before but we submitted new payment forms to the bank which are awaiting bank approval now. Once the bank approves the payment, we will deduct the amount within the next 24 hours. Share the following link SDR2.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "131",
+    "notionBlockId": "2117432e-b843-81cd-89d2-d10b12cda702"
+  },
+  {
+    "id": "133",
+    "type": "condition",
+    "title": "❷ Condition If SDR2.Status = “Incomplete / Missing signature”",
+    "level": 2,
+    "parentId": "123",
+    "notionBlockId": "2117432e-b843-801f-9b29-f6966255fbbf"
+  },
+  {
+    "id": "134",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of SDR2.Amount for the second installment of the 2-year visa is still pending due to missing the customer’s signature and bank information. Share the following link SDR2.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "133",
+    "notionBlockId": "2117432e-b843-81d2-bf1e-d0ad4674c8a0"
+  },
+  {
+    "id": "135",
+    "type": "condition",
+    "title": "❷ Condition If SDR2.Status = “Incomplete / Documents rejected (EID, IBAN, etc.)”",
+    "level": 2,
+    "parentId": "123",
+    "notionBlockId": "2117432e-b843-806a-9a53-c07de69b4d11"
+  },
+  {
+    "id": "136",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of SDR2.Amount for the second installment of the 2-year visa is still pending due to the following reason: {SDR2.Status}. Share the following link SDR2.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "135",
+    "notionBlockId": "2117432e-b843-81f3-a1ce-d934deed6c78"
+  },
+  {
+    "id": "137",
+    "type": "condition",
+    "title": "❷ Condition If SDR2.Status = “Pending bank approval”",
+    "level": 2,
+    "parentId": "123",
+    "notionBlockId": "2117432e-b843-8007-8d86-c4507c9575a4"
+  },
+  {
+    "id": "138",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of SDR2.Amount for the second installment of the 2-year visa is still pending and currently awaiting initial bank approval. Share the following link SDR2.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "137",
+    "notionBlockId": "2117432e-b843-81c0-ad9c-f50dbf278923"
+  },
+  {
+    "id": "139",
+    "type": "condition",
+    "title": "❷ Condition If SDR2.Status = “Bounced”",
+    "level": 2,
+    "parentId": "123",
+    "notionBlockId": "2117432e-b843-80da-bc86-c42eeb7484e2"
+  },
+  {
+    "id": "140",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of Untitled for the second installment of the 2-year visa is bounced due to insufficient funds. We'll try deducting the amount again 3 days after the payment was bounced and the customer should either make sure to add funds to the bank account or the customer can settle the payment via a different credit or debit card through this link SDR2.PaymentLink.",
+    "level": 3,
+    "parentId": "139",
+    "notionBlockId": "2117432e-b843-813f-b2d4-c88963c9318d"
+  },
+  {
+    "id": "141",
+    "type": "condition",
+    "title": "❶ Condition If Untitled = “TRUE“ AND PaymentMethod = “Direct Debit”",
+    "level": 1,
+    "parentId": "1",
+    "notionBlockId": "2117432e-b843-8083-b66c-c86809bee760"
+  },
+  {
+    "id": "142",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "",
+    "level": 2,
+    "parentId": "141",
+    "notionBlockId": "2117432e-b843-81b9-8f5b-ef2597ad3157"
+  },
+  {
+    "id": "143",
+    "type": "condition",
+    "title": "❷ Condition If SDR3.Status = “Received”",
+    "level": 2,
+    "parentId": "141",
+    "notionBlockId": "2117432e-b843-8023-8689-fbb2d4462aab"
+  },
+  {
+    "id": "144",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED Untitled for the third installment of the 2-year visa which we received on SDR3.ReceivalDate.",
+    "level": 3,
+    "parentId": "143",
+    "notionBlockId": "2117432e-b843-815b-ae6d-cf475ffb7567"
+  },
+  {
+    "id": "145",
+    "type": "condition",
+    "title": "❷ Condition If SDR3.Status = “Pending collection”",
+    "level": 2,
+    "parentId": "141",
+    "notionBlockId": "2117432e-b843-804e-a53a-e3518c7d8716"
+  },
+  {
+    "id": "146",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED SDR3.Amount for the third installment of the 2-year visa is still pending. We will deduct the amount within the next 24 hours. Share the following link SDR3.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "145",
+    "notionBlockId": "2117432e-b843-814f-aee0-c76b9893219d"
+  },
+  {
+    "id": "147",
+    "type": "condition",
+    "title": "❷ Condition If SDR3.Status = “Rejected / Pending client to sign”",
+    "level": 2,
+    "parentId": "141",
+    "notionBlockId": "2117432e-b843-80f2-99b2-ca8d66809b32"
+  },
+  {
+    "id": "148",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of SDR3.Amount for the third installment of the 2-year visa was rejected by the bank and is pending the customer’s signature to resubmit the approval to the bank for deduction. Share the following link SDR3.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "147",
+    "notionBlockId": "2117432e-b843-81c8-89ad-f71cf6eec4b3"
+  },
+  {
+    "id": "149",
+    "type": "condition",
+    "title": "❷ Condition If SDR3.Status = “Rejected / Pending bank response”",
+    "level": 2,
+    "parentId": "141",
+    "notionBlockId": "2117432e-b843-8098-919b-e747cbdb047a"
+  },
+  {
+    "id": "150",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of SDR3.Amount for the third installment of the 2-year visa was rejected by the bank before but we submitted new payment forms to the bank which are awaiting bank approval now. Once the bank approves the payment, we will deduct the amount within the next 24 hours. Share the following link SDR3.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "149",
+    "notionBlockId": "2117432e-b843-81b4-8888-cfd8e4bca76a"
+  },
+  {
+    "id": "151",
+    "type": "condition",
+    "title": "❷ Condition If SDR3.Status = “Incomplete / Missing signature”",
+    "level": 2,
+    "parentId": "141",
+    "notionBlockId": "2117432e-b843-805f-bd1d-eb32523ba098"
+  },
+  {
+    "id": "152",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of SDR3.Amount for the third installment of the 2-year visa is still pending due to missing the customer’s signature and bank information. Share the following link SDR3.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "151",
+    "notionBlockId": "2117432e-b843-8162-b341-da78e5148a6d"
+  },
+  {
+    "id": "153",
+    "type": "condition",
+    "title": "❷ Condition If SDR3.Status = “Incomplete / Documents rejected (EID, IBAN, etc.)”",
+    "level": 2,
+    "parentId": "141",
+    "notionBlockId": "2117432e-b843-80d6-b4c7-f81d39f95cdf"
+  },
+  {
+    "id": "154",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of Untitled for the third installment of the 2-year visa is still pending due to the following reason: SDR3.Status. Share the following link SDR3.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "153",
+    "notionBlockId": "2117432e-b843-8188-a876-e60b7433f80e"
+  },
+  {
+    "id": "155",
+    "type": "condition",
+    "title": "❷ Condition If SDR3.Status = “Pending bank approval”",
+    "level": 2,
+    "parentId": "141",
+    "notionBlockId": "2117432e-b843-80a3-81c3-faee7f653727"
+  },
+  {
+    "id": "156",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of SDR3.Amount for the third installment of the 2-year visa is still pending and currently awaiting initial bank approval. Share the following link SDR3.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "155",
+    "notionBlockId": "2117432e-b843-81d8-995e-c6c89d0fc02a"
+  },
+  {
+    "id": "157",
+    "type": "condition",
+    "title": "❷ Condition If SDR3.Status = “Bounced”",
+    "level": 2,
+    "parentId": "141",
+    "notionBlockId": "2117432e-b843-80b7-876c-da4f9828c447"
+  },
+  {
+    "id": "158",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of Untitled for the third installment of the 2-year visa is bounced due to insufficient funds. We'll try deducting the amount again 3 days after the payment was bounced and the customer should either make sure to add funds to the bank account or the customer can settle the payment via a different credit or debit card through this link SDR3.PaymentLink.",
+    "level": 3,
+    "parentId": "157",
+    "notionBlockId": "2117432e-b843-81ac-8b03-eab04464fa81"
+  },
+  {
+    "id": "159",
+    "type": "condition",
+    "title": "❶ Condition If Untitled = “TRUE“ AND PaymentMethod = “Direct Debit”",
+    "level": 1,
+    "parentId": "1",
+    "notionBlockId": "2117432e-b843-80c2-bc5b-ce7e8b33a629"
+  },
+  {
+    "id": "160",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "",
+    "level": 2,
+    "parentId": "159",
+    "notionBlockId": "2117432e-b843-81aa-9ae4-f5762b838c5c"
+  },
+  {
+    "id": "161",
+    "type": "condition",
+    "title": "❷ Condition If MatchingFee.Status = “Received”",
+    "level": 2,
+    "parentId": "159",
+    "notionBlockId": "2117432e-b843-801f-a12c-f2e4ccc80a5f"
+  },
+  {
+    "id": "162",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED Untitled for the matching fee related to the 2-year visa which we received on MatchingFee.ReceivalDate.",
+    "level": 3,
+    "parentId": "161",
+    "notionBlockId": "2117432e-b843-8133-91b9-e2520d271f9c"
+  },
+  {
+    "id": "163",
+    "type": "condition",
+    "title": "❷ Condition If MatchingFee.Status = “Pending collection”",
+    "level": 2,
+    "parentId": "159",
+    "notionBlockId": "2117432e-b843-80b6-9503-d15c85630f66"
+  },
+  {
+    "id": "164",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED MatchingFee.amount for the matching fee related to the 2-year visa is still pending. We will deduct the amount within the next 24 hours. Share the following link MatchingFee.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "163",
+    "notionBlockId": "2117432e-b843-8120-8952-c63735431186"
+  },
+  {
+    "id": "165",
+    "type": "condition",
+    "title": "❷ Condition If MatchingFee.Status = “Rejected / Pending client to sign”",
+    "level": 2,
+    "parentId": "159",
+    "notionBlockId": "2117432e-b843-807c-a3a8-c30b15e63def"
+  },
+  {
+    "id": "166",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of MatchingFee.amount for the matching fee related to the 2-year visa was rejected by the bank and is pending the customer’s signature to resubmit the approval to the bank for deduction. Share the following link MatchingFee.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "165",
+    "notionBlockId": "2117432e-b843-8181-b9fa-d394bb3df113"
+  },
+  {
+    "id": "167",
+    "type": "condition",
+    "title": "❷ Condition If MatchingFee.Status = “Rejected / Pending bank response”",
+    "level": 2,
+    "parentId": "159",
+    "notionBlockId": "2117432e-b843-8039-97a3-cab32d09da99"
+  },
+  {
+    "id": "168",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of MatchingFee.amount for the matching fee related to the 2-year visa was rejected by the bank before but we submitted new payment forms to the bank which are awaiting bank approval now. Once the bank approves the payment, we will deduct the amount within the next 24 hours. Share the following link MatchingFee.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "167",
+    "notionBlockId": "2117432e-b843-8166-b8dd-c9722cd9a145"
+  },
+  {
+    "id": "169",
+    "type": "condition",
+    "title": "❷ Condition If MatchingFee.Status = “Incomplete / Missing signature”",
+    "level": 2,
+    "parentId": "159",
+    "notionBlockId": "2117432e-b843-80fe-9054-ca04a44145ba"
+  },
+  {
+    "id": "170",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of MatchingFee.amount for the matching fee related to the 2-year visa is still pending due to missing the customer’s signature and bank information. Share the following link MatchingFee.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "169",
+    "notionBlockId": "2117432e-b843-81ac-b201-efd0b2ab8dfe"
+  },
+  {
+    "id": "171",
+    "type": "condition",
+    "title": "❷ Condition If MatchingFee.Status = “Incomplete / Documents rejected (EID, IBAN, etc.)”",
+    "level": 2,
+    "parentId": "159",
+    "notionBlockId": "2117432e-b843-8017-8202-f737537db523"
+  },
+  {
+    "id": "172",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of Untitled for the matching fee related to the 2-year visa is still pending due to the following reason: MatchingFee.Status. Share the following link MatchingFee.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "171",
+    "notionBlockId": "2117432e-b843-8139-8428-dbd01678c1e6"
+  },
+  {
+    "id": "173",
+    "type": "condition",
+    "title": "❷ Condition If MatchingFee.Status = “Pending bank approval”",
+    "level": 2,
+    "parentId": "159",
+    "notionBlockId": "2117432e-b843-8056-b187-d0c915281160"
+  },
+  {
+    "id": "174",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of MatchingFee.amount for the matching fee related to the 2-year visa is still pending and currently awaiting initial bank approval. Share the following link MatchingFee.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "173",
+    "notionBlockId": "2117432e-b843-8194-9787-ffb1ad940e8f"
+  },
+  {
+    "id": "175",
+    "type": "condition",
+    "title": "❷ Condition If MatchingFee.Status = “Bounced”",
+    "level": 2,
+    "parentId": "159",
+    "notionBlockId": "2117432e-b843-80c9-bbc8-e276529b42dc"
+  },
+  {
+    "id": "176",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of Untitled for the matching fee related to the 2-year visa is bounced due to insufficient funds. We'll try deducting the amount again 3 days after the payment was bounced and the customer should either make sure to add funds to the bank account or the customer can settle the payment via a different credit or debit card through this link MatchingFee.PaymentLink.",
+    "level": 3,
+    "parentId": "175",
+    "notionBlockId": "2117432e-b843-81f6-920e-eba328227227"
+  },
+  {
+    "id": "177",
+    "type": "condition",
+    "title": "❶ Condition If Untitled = “TRUE“ AND PaymentMethod = “Direct Debit”",
+    "level": 1,
+    "parentId": "1",
+    "notionBlockId": "2117432e-b843-8029-9ae8-dfba4e2305ae"
+  },
+  {
+    "id": "178",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "",
+    "level": 2,
+    "parentId": "177",
+    "notionBlockId": "2117432e-b843-8197-bed2-d388c1ebf91a"
+  },
+  {
+    "id": "179",
+    "type": "condition",
+    "title": "❷ Condition If TravelAssist.Status = “Received”",
+    "level": 2,
+    "parentId": "177",
+    "notionBlockId": "2117432e-b843-8099-8b7e-def9fd7a88bd"
+  },
+  {
+    "id": "180",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED Untitled for travel assistance to bring the maid to the UAE which we received on TravelAssist.ReceivalDate.",
+    "level": 3,
+    "parentId": "179",
+    "notionBlockId": "2117432e-b843-81b6-945e-f1ad0e4c9025"
+  },
+  {
+    "id": "181",
+    "type": "condition",
+    "title": "❷ Condition If TravelAssist.Status = “Pending collection”",
+    "level": 2,
+    "parentId": "177",
+    "notionBlockId": "2117432e-b843-808b-a8ab-d1efdb077e75"
+  },
+  {
+    "id": "182",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED TravelAssist.Amount for travel assistance to bring the maid to the UAE is still pending. We will deduct the amount within the next 24 hours. Share the following link TravelAssist.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "181",
+    "notionBlockId": "2117432e-b843-81b9-88aa-eef018df3e61"
+  },
+  {
+    "id": "183",
+    "type": "condition",
+    "title": "❷ Condition If TravelAssist.Status = “Rejected / Pending client to sign”",
+    "level": 2,
+    "parentId": "177",
+    "notionBlockId": "2117432e-b843-8014-b838-d6505ea1524b"
+  },
+  {
+    "id": "184",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of TravelAssist.Amount for travel assistance to bring the maid to the UAE was rejected by the bank and is pending the customer’s signature to resubmit the approval to the bank for deduction. Share the following link TravelAssist.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "183",
+    "notionBlockId": "2117432e-b843-8122-9462-fee8fcf284f6"
+  },
+  {
+    "id": "185",
+    "type": "condition",
+    "title": "❷ Condition If TravelAssist.Status = “Rejected / Pending bank response”",
+    "level": 2,
+    "parentId": "177",
+    "notionBlockId": "2117432e-b843-8098-918f-f1a823e8fe47"
+  },
+  {
+    "id": "186",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of TravelAssist.Amount for travel assistance to bring the maid to the UAE was rejected by the bank before but we submitted new payment forms to the bank which are awaiting bank approval now. Once the bank approves the payment, we will deduct the amount within the next 24 hours. Share the following link TravelAssist.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "185",
+    "notionBlockId": "2117432e-b843-8195-b7b3-c9d7d6f48052"
+  },
+  {
+    "id": "187",
+    "type": "condition",
+    "title": "❷ Condition If TravelAssist.Status = “Incomplete / Missing signature”",
+    "level": 2,
+    "parentId": "177",
+    "notionBlockId": "2117432e-b843-8081-9c74-c8f065b69ff1"
+  },
+  {
+    "id": "188",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of TravelAssist.Amount for travel assistance to bring the maid to the UAE is still pending due to missing the customer’s signature and bank information. Share the following link TravelAssist.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "187",
+    "notionBlockId": "2117432e-b843-810d-8c61-fe51e8ed6151"
+  },
+  {
+    "id": "189",
+    "type": "condition",
+    "title": "❷ Condition If TravelAssist.Status = “Incomplete / Documents rejected (EID, IBAN, etc.)”",
+    "level": 2,
+    "parentId": "177",
+    "notionBlockId": "2117432e-b843-80ce-ab8f-f4d5c1b26797"
+  },
+  {
+    "id": "190",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of Untitled for travel assistance to bring the maid to the UAE is still pending due to the following reason: TravelAssist.Status. Share the following link TravelAssist.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "189",
+    "notionBlockId": "2117432e-b843-8128-9271-f29d744a67be"
+  },
+  {
+    "id": "191",
+    "type": "condition",
+    "title": "❷ Condition If TravelAssist.Status = “Pending bank approval”",
+    "level": 2,
+    "parentId": "177",
+    "notionBlockId": "2117432e-b843-80bf-98e3-c00a8b2c4574"
+  },
+  {
+    "id": "192",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of TravelAssist.Amount for travel assistance to bring the maid to the UAE is still pending and currently awaiting initial bank approval. Share the following link TravelAssist.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "191",
+    "notionBlockId": "2117432e-b843-814d-bddd-de6a2b740cc3"
+  },
+  {
+    "id": "193",
+    "type": "condition",
+    "title": "❷ Condition If TravelAssist.Status = “Bounced”",
+    "level": 2,
+    "parentId": "177",
+    "notionBlockId": "2117432e-b843-808a-baa8-c466c91c0865"
+  },
+  {
+    "id": "194",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of Untitled for travel assistance to bring the maid to the UAE is bounced due to insufficient funds. We'll try deducting the amount again 3 days after the payment was bounced and the customer should either make sure to add funds to the bank account or the customer can settle the payment via a different credit or debit card through this link TravelAssist.PaymentLink.",
+    "level": 3,
+    "parentId": "193",
+    "notionBlockId": "2117432e-b843-8179-a192-c535a02aa16e"
+  },
+  {
+    "id": "195",
+    "type": "condition",
+    "title": "❶ Condition If OverstayFee.isDue = “TRUE“ AND {PaymentMethod} = “Direct Debit”",
+    "level": 1,
+    "parentId": "1",
+    "notionBlockId": "2117432e-b843-8018-b13a-d6780dbe05b6"
+  },
+  {
+    "id": "196",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "",
+    "level": 2,
+    "parentId": "195",
+    "notionBlockId": "2117432e-b843-81a6-8eae-ec8bf111b887"
+  },
+  {
+    "id": "197",
+    "type": "condition",
+    "title": "❷ Condition If OverstayFee.Status = “Received”",
+    "level": 2,
+    "parentId": "195",
+    "notionBlockId": "2117432e-b843-80ca-b930-ec1ac0dda4f6"
+  },
+  {
+    "id": "198",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED Untitled for the maid’s overstay fines which we received on OverstayFee.ReceivalDate.",
+    "level": 3,
+    "parentId": "197",
+    "notionBlockId": "2117432e-b843-81ac-8953-eec7fcd2c616"
+  },
+  {
+    "id": "199",
+    "type": "condition",
+    "title": "❷ Condition If OverstayFee.Status = “Pending collection”",
+    "level": 2,
+    "parentId": "195",
+    "notionBlockId": "2117432e-b843-80d4-9dc0-e586657fe8be"
+  },
+  {
+    "id": "200",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED OverstayFee.amount for the maid’s overstay fines is still pending. We will deduct the amount within the next 24 hours. Share the following link OverstayFee.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "199",
+    "notionBlockId": "2117432e-b843-816b-b158-dd0305f6809d"
+  },
+  {
+    "id": "201",
+    "type": "condition",
+    "title": "❷ Condition If OverstayFee.Status = “Rejected / Pending client to sign”",
+    "level": 2,
+    "parentId": "195",
+    "notionBlockId": "2117432e-b843-807e-bedc-c62e876d602e"
+  },
+  {
+    "id": "202",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of OverstayFee.amount for the maid’s overstay fines was rejected by the bank and is pending the customer’s signature to resubmit the approval to the bank for deduction. Share the following link OverstayFee.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "201",
+    "notionBlockId": "2117432e-b843-81c5-af30-edd64e15db63"
+  },
+  {
+    "id": "203",
+    "type": "condition",
+    "title": "❷ Condition If OverstayFee.Status = “Rejected / Pending bank response”",
+    "level": 2,
+    "parentId": "195",
+    "notionBlockId": "2117432e-b843-808d-a9c7-c078ad3019bd"
+  },
+  {
+    "id": "204",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of OverstayFee.amount for the maid’s overstay fines was rejected by the bank before but we submitted new payment forms to the bank which are awaiting bank approval now. Once the bank approves the payment, we will deduct the amount within the next 24 hours. Share the following link OverstayFee.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "203",
+    "notionBlockId": "2117432e-b843-8173-973c-e3d72f7acd92"
+  },
+  {
+    "id": "205",
+    "type": "condition",
+    "title": "❷ Condition If OverstayFee.Status = “Incomplete / Missing signature”",
+    "level": 2,
+    "parentId": "195",
+    "notionBlockId": "2117432e-b843-8040-9766-d738978dbe4a"
+  },
+  {
+    "id": "206",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of OverstayFee.amount for the maid’s overstay fines is still pending due to missing the customer’s signature and bank information. Share the following link OverstayFee.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "205",
+    "notionBlockId": "2117432e-b843-81d9-9023-cae6f17abbd3"
+  },
+  {
+    "id": "207",
+    "type": "condition",
+    "title": "❷ Condition If OverstayFee.Status  “Incomplete / Documents rejected (EID, IBAN, etc.)”",
+    "level": 2,
+    "parentId": "195",
+    "notionBlockId": "2117432e-b843-8074-8e2c-fdeab9169e73"
+  },
+  {
+    "id": "208",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of Untitled for the maid’s overstay fines is still pending due to the following reason: OverstayFee.Status. Share the following link OverstayFee.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "207",
+    "notionBlockId": "2117432e-b843-81e6-930f-ec57ce1bf10f"
+  },
+  {
+    "id": "209",
+    "type": "condition",
+    "title": "❷ Condition If OverstayFee.Status = “Pending bank approval”",
+    "level": 2,
+    "parentId": "195",
+    "notionBlockId": "2117432e-b843-8016-998c-e27e8c6fb685"
+  },
+  {
+    "id": "210",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of OverstayFee.amount for the maid’s overstay fines is still pending and currently awaiting initial bank approval. Share the following link OverstayFee.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "209",
+    "notionBlockId": "2117432e-b843-813f-8c55-f9837e385a3a"
+  },
+  {
+    "id": "211",
+    "type": "condition",
+    "title": "❷ Condition If OverstayFee.Status = “Bounced”",
+    "level": 2,
+    "parentId": "195",
+    "notionBlockId": "2117432e-b843-80d8-80ab-e3b0606e90d0"
+  },
+  {
+    "id": "212",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of Untitled for the maid’s overstay fines is bounced due to insufficient funds. We'll try deducting the amount again 3 days after the payment was bounced and the customer should either make sure to add funds to the bank account or the customer can settle the payment via a different credit or debit card through this link OverstayFee.PaymentLink.",
+    "level": 3,
+    "parentId": "211",
+    "notionBlockId": "2117432e-b843-8198-bfa3-e73523d9b050"
+  },
+  {
+    "id": "213",
+    "type": "condition",
+    "title": "❶ Condition If Untitled = “TRUE“ AND PaymentMethod = “Direct Debit”",
+    "level": 1,
+    "parentId": "1",
+    "notionBlockId": "2117432e-b843-8081-b17c-f4a17d49b3d9"
+  },
+  {
+    "id": "214",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "",
+    "level": 2,
+    "parentId": "213",
+    "notionBlockId": "2117432e-b843-81e9-9ef9-c091c15ecb1c"
+  },
+  {
+    "id": "215",
+    "type": "condition",
+    "title": "❷ Condition If PreCollectedSalary.Status = “Received”",
+    "level": 2,
+    "parentId": "213",
+    "notionBlockId": "2117432e-b843-80eb-bd2c-e5e6bbf98ba4"
+  },
+  {
+    "id": "216",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED Untitled for the maid’s salary which we received on PreCollectedSalary.ReceivalDate",
+    "level": 3,
+    "parentId": "215",
+    "notionBlockId": "2117432e-b843-8118-b019-fecf273b1c48"
+  },
+  {
+    "id": "217",
+    "type": "condition",
+    "title": "❷ Condition If PreCollectedSalary.Status = “Pending collection”",
+    "level": 2,
+    "parentId": "213",
+    "notionBlockId": "2117432e-b843-80d3-87a9-c2b6ce09ab1b"
+  },
+  {
+    "id": "218",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of AED PreCollectedSalary.amount for the maid’s salary is still pending. We will deduct the amount within the next 24 hours. Share the following link PreCollectedSalary.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "217",
+    "notionBlockId": "2117432e-b843-8115-8c0a-fedd381c116c"
+  },
+  {
+    "id": "219",
+    "type": "condition",
+    "title": "❷ Condition If PreCollectedSalary.Status = “Rejected / Pending client to sign”",
+    "level": 2,
+    "parentId": "213",
+    "notionBlockId": "2117432e-b843-8086-a0a2-d648a196272b"
+  },
+  {
+    "id": "220",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of PreCollectedSalary.amount for the maid’s salary was rejected by the bank and is pending the customer’s signature to resubmit the approval to the bank for deduction. Share the following link PreCollectedSalary.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "219",
+    "notionBlockId": "2117432e-b843-81b2-bfe1-d60563f87698"
+  },
+  {
+    "id": "221",
+    "type": "condition",
+    "title": "❷ Condition If PreCollectedSalary.Status = “Rejected / Pending bank response”",
+    "level": 2,
+    "parentId": "213",
+    "notionBlockId": "2117432e-b843-80b0-8c23-d8defefecdda"
+  },
+  {
+    "id": "222",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of PreCollectedSalary.amount for the maid’s salary was rejected by the bank before but we submitted new payment forms to the bank which are awaiting bank approval now. Once the bank approves the payment, we will deduct the amount within the next 24 hours. Share the following link PreCollectedSalary.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "221",
+    "notionBlockId": "2117432e-b843-81f5-8b73-e28a51808094"
+  },
+  {
+    "id": "223",
+    "type": "condition",
+    "title": "❷ Condition If PreCollectedSalary.Status = “Incomplete / Missing signature”",
+    "level": 2,
+    "parentId": "213",
+    "notionBlockId": "2117432e-b843-809e-8e96-ca504a132d53"
+  },
+  {
+    "id": "224",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of PreCollectedSalary.amount for the maid’s salary is still pending due to missing the customer’s signature and bank information. Share the following link PreCollectedSalary.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "223",
+    "notionBlockId": "2117432e-b843-818e-88f1-dc55b6faedd2"
+  },
+  {
+    "id": "225",
+    "type": "condition",
+    "title": "❷ Condition If PreCollectedSalary.Status = “Incomplete / Documents rejected (EID, IBAN, etc.)”",
+    "level": 2,
+    "parentId": "213",
+    "notionBlockId": "2117432e-b843-807f-96fa-eae9ef56297d"
+  },
+  {
+    "id": "226",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of PreCollectedSalary.amount for the maid’s salary is still pending due to the following reason: {PreCollectedSalary.Status}. Share the following link PreCollectedSalary.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "225",
+    "notionBlockId": "2117432e-b843-81f0-b690-ef668c297820"
+  },
+  {
+    "id": "227",
+    "type": "condition",
+    "title": "❷ Condition If PreCollectedSalary.Status = “Pending bank approval”",
+    "level": 2,
+    "parentId": "213",
+    "notionBlockId": "2117432e-b843-80e3-b81c-fd26c3c14c7c"
+  },
+  {
+    "id": "228",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of PreCollectedSalary.amount for the maid’s salary is still pending and currently awaiting initial bank approval. Share the following link PreCollectedSalary.PaymentLink with the customer only when the customer asks for the payment link/credit card link to pay via credit card.",
+    "level": 3,
+    "parentId": "227",
+    "notionBlockId": "2117432e-b843-81d4-98d2-c8512d2102ff"
+  },
+  {
+    "id": "229",
+    "type": "condition",
+    "title": "❷ Condition If PreCollectedSalary.Status = “Bounced”",
+    "level": 2,
+    "parentId": "213",
+    "notionBlockId": "2117432e-b843-8097-8b2f-d1f6660d47e4"
+  },
+  {
+    "id": "230",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "A payment of Untitled for the maid’s salary is bounced due to insufficient funds. We'll try deducting the amount again 3 days after the payment was bounced and the customer should either make sure to add funds to the bank account or the customer can settle the payment via a different credit or debit card through this link PreCollectedSalary.PaymentLink.",
+    "level": 3,
+    "parentId": "229",
+    "notionBlockId": "2117432e-b843-817f-b379-cf13b851585c"
+  },
+  {
+    "id": "231",
+    "type": "condition",
+    "title": "❶ Condition If (PaymentMethod = \"Direct Debit\" AND (Untitled = \"Bounced\" OR Untitled = \"Pending Collection\" OR Insurance.Status = \"Bounced\" OR Insurance.Status = \"Pending Collection\" OR Untitled = \"Bounced\" OR Untitled  = \"Pending Collection\" OR Untitled = \"Bounced\" OR Untitled = \"Pending Collection\" OR Untitled = \"Bounced\" OR Untitled = \"Pending Collection\" OR Untitled = \"Bounced\" OR Untitled = \"Pending Collection\" OR Untitled = \"Bounced\" OR Untitled = \"Pending Collection\" OR Untitled = \"Bounced\" OR Untitled = \"Pending Collection\" OR OverstayFee.Status = \"Bounced\" OR OverstayFee.Status = \"Pending Collection\" OR PreCollectedSalary.Status = \"Bounced\" OR PreCollectedSalary.Status = \"Pending Collection\"))",
+    "level": 1,
+    "parentId": "1",
+    "notionBlockId": "2117432e-b843-804e-b768-d2c8d7673adb"
+  },
+  {
+    "id": "232",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "Explain to the customer that the payment amount might have been deducted from the customer’s bank account but the payment status is still showing as not received and it takes up to 24 hours to be reflected only when the customer claims that we already deducted the payment for the current month.",
+    "level": 2,
+    "parentId": "231",
+    "notionBlockId": "2117432e-b843-81f0-ab44-dd5a683a84f9"
+  }
+]

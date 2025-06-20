@@ -32,7 +32,7 @@ def test_graph_structure_api():
     
     # Test data
     test_data = {
-        "pageId": "2117432eb84380768024ee386b9bc3a5",  # Replace with your actual page ID
+        "pageId": "2117432eb8438077a1f8c72e2d079b61",  # Replace with your actual page ID
         "text": "Business ECP:"
     }
     

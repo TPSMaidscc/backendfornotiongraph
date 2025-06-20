@@ -1136,7 +1136,8 @@ app.post('/api/quick-test', async (req, res) => {
   }
 });
 
-// Add this new endpoint to your existing Express app
+// MODIFICATION: Update the /api/graph-structure endpoint response
+// Replace the existing endpoint with this simplified version:
 
 app.post('/api/graph-structure', async (req, res) => {
   const startTime = Date.now();
@@ -1160,8 +1161,10 @@ app.post('/api/graph-structure', async (req, res) => {
     const simplifiedStructure = extractSimplifiedGraphStructure(toggleStructure.result);
     console.log(`✅ Simplified structure created: ${simplifiedStructure.length} nodes`);
 
-    // Return only the simplified nodes array
-    res.json(simplifiedStructure);
+    // Return the simplified structure wrapped in results object
+    res.json({
+      results: simplifiedStructure
+    });
 
   } catch (error) {
     console.error('❌ Error extracting graph structure:', error);
