@@ -937,7 +937,7 @@ app.get('/', (req, res) => {
       'GET /api/firebase-status', 
       'POST /api/create-graph',
       'POST /api/quick-test',
-      'GET /api/graph-structure',
+      'POST /api/graph-structure',
       'GET /api/graph-data/:pageId'
       
     ]
@@ -1135,10 +1135,10 @@ app.post('/api/quick-test', async (req, res) => {
     });
   }
 });
- 
+
 // Add this new endpoint to your existing Express app
 
-app.get('/api/graph-structure', async (req, res) => {
+app.post('/api/graph-structure', async (req, res) => {
   const startTime = Date.now();
   
   try {
