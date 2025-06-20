@@ -2,6 +2,23 @@ import requests
 import json
 from datetime import datetime
 
+def print_hierarchy(node, all_nodes, indent_level):
+    """
+    Print node hierarchy in a tree structure
+    """
+    indent = "  " * indent_level
+    node_type = node.get('type', 'unknown').upper()
+    title_preview = node.get('title', 'No title')[:50]
+    if len(node.get('title', '')) > 50:
+        title_preview += "..."
+    
+    print(f"{indent}├─ {node_type}: {title_preview}")
+    
+    # Find children
+    children = [n for n in all_nodes if n.get('parentId') == node.get('id')]
+    for child in children:
+        print_hierarchy(child, all_nodes, indent_level + 1)
+
 def test_graph_structure_api():
     """
     Test the new /api/graph-structure endpoint
@@ -38,21 +55,11 @@ def test_graph_structure_api():
         print(f"📊 Status Code: {response.status_code}")
         
         if response.status_code == 200:
-            # Parse JSON response
-            data = response.json()
+            # Parse JSON response - now it's a simple array
+            nodes = response.json()
             
             print("✅ SUCCESS!")
-            print(f"⏱️  Processing Time: {data.get('metadata', {}).get('processingTimeMs', 'N/A')}ms")
-            print(f"📄 Page ID: {data.get('pageId', 'N/A')}")
-            print(f"🔍 Search Text: {data.get('searchText', 'N/A')}")
-            
-            # Print structure summary
-            structure = data.get('structure', {})
-            nodes = structure.get('nodes', [])
-            edges = structure.get('edges', [])
-            
             print(f"📈 Total Nodes: {len(nodes)}")
-            print(f"🔗 Total Edges: {len(edges)}")
             
             # Print node breakdown
             node_types = {}
@@ -67,29 +74,39 @@ def test_graph_structure_api():
             # Print first few nodes with details
             print(f"\n🏗️  First {min(3, len(nodes))} Nodes:")
             for i, node in enumerate(nodes[:3]):
-                print(f"  {i+1}. {node.get('type', 'unknown').upper()}: {node.get('title', 'No title')}")
+                print(f"  {i+1}. {node.get('type', 'unknown').upper()}")
+                print(f"     📝 Title: {node.get('title', 'No title')[:80]}...")
                 if node.get('type') == 'policy' and node.get('content'):
-                    content_items = len(node.get('content', []))
-                    print(f"     📝 Policy has {content_items} content items")
+                    content_preview = node.get('content', '')[:100]
+                    print(f"     📋 Content: {content_preview}...")
                 print(f"     🆔 ID: {node.get('id')}, Level: {node.get('level')}")
+                print(f"     🔗 Notion Block ID: {node.get('notionBlockId', 'N/A')}")
+                print(f"     👨‍👩‍👧‍👦 Parent ID: {node.get('parentId', 'None')}")
+                print()
             
-            # Show policy content example
+            # Show policy content examples
             policy_nodes = [n for n in nodes if n.get('type') == 'policy']
             if policy_nodes:
-                print(f"\n📋 First Policy Content Example:")
-                policy = policy_nodes[0]
-                print(f"   Title: {policy.get('title')}")
-                content = policy.get('content', [])
-                for i, item in enumerate(content[:3]):  # Show first 3 items
-                    print(f"   {i+1}. {item.get('content', 'No content')}")
-                if len(content) > 3:
-                    print(f"   ... and {len(content) - 3} more items")
+                print(f"\n📋 Policy Content Examples:")
+                for i, policy in enumerate(policy_nodes[:2]):  # Show first 2 policies
+                    print(f"   Policy {i+1}: {policy.get('title', 'No title')[:60]}...")
+                    content = policy.get('content', '')
+                    if content:
+                        print(f"   Content: {content[:150]}...")
+                    print(f"   Block ID: {policy.get('notionBlockId')}")
+                    print()
+            
+            # Show hierarchy structure
+            print("🌳 Node Hierarchy:")
+            root_nodes = [n for n in nodes if n.get('parentId') is None]
+            for root in root_nodes:
+                print_hierarchy(root, nodes, 0)
             
             # Save full response to file
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"graph_structure_{timestamp}.json"
             with open(filename, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
+                json.dump(nodes, f, indent=2, ensure_ascii=False)
             print(f"\n💾 Full response saved to: {filename}")
             
         else:

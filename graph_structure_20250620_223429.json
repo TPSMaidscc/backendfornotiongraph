@@ -1,0 +1,78 @@
+[
+  {
+    "id": "1",
+    "type": "businessECP",
+    "title": "Business ECP:  (→ TyptestECP Name Here ←)",
+    "level": 0,
+    "parentId": null,
+    "notionBlockId": "2117432e-b843-8142-94b3-f5d4bce0d4b4"
+  },
+  {
+    "id": "2",
+    "type": "condition",
+    "title": "❶ Condition (→ x=5 ←)",
+    "level": 1,
+    "parentId": "1",
+    "notionBlockId": "2117432e-b843-8148-acf9-f37156ab2ed0"
+  },
+  {
+    "id": "3",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←) - optional title",
+    "content": "This is a test",
+    "level": 2,
+    "parentId": "2",
+    "notionBlockId": "2117432e-b843-8121-9e44-fa584608604b"
+  },
+  {
+    "id": "4",
+    "type": "condition",
+    "title": "❷ Condition (→ y=2 ←)",
+    "level": 2,
+    "parentId": "2",
+    "notionBlockId": "2117432e-b843-80d4-a567-c2f318931bf1"
+  },
+  {
+    "id": "5",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "",
+    "level": 3,
+    "parentId": "4",
+    "notionBlockId": "2117432e-b843-8184-a238-dc35f47193b8"
+  },
+  {
+    "id": "6",
+    "type": "condition",
+    "title": "❸ Condition (→ Type your Condition Here ←)",
+    "level": 3,
+    "parentId": "4",
+    "notionBlockId": "2117432e-b843-80a6-bac1-e51fe48433ba"
+  },
+  {
+    "id": "7",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "",
+    "level": 4,
+    "parentId": "6",
+    "notionBlockId": "2117432e-b843-81b6-98a0-c1fb3f092324"
+  },
+  {
+    "id": "8",
+    "type": "condition",
+    "title": "❶ Condition (→ Type your Condition Here ←)",
+    "level": 1,
+    "parentId": "1",
+    "notionBlockId": "2177432e-b843-80af-a8ed-c56618dd6933"
+  },
+  {
+    "id": "9",
+    "type": "policy",
+    "title": "← Policy: (→ Type your Policy Name Here ←)",
+    "content": "",
+    "level": 2,
+    "parentId": "8",
+    "notionBlockId": "2177432e-b843-8193-9ca7-cb413a78faff"
+  }
+]
