@@ -937,7 +937,9 @@ app.get('/', (req, res) => {
       'GET /api/firebase-status', 
       'POST /api/create-graph',
       'POST /api/quick-test',
+      'Post /api/graph-structure',
       'GET /api/graph-data/:pageId'
+      
     ]
   });
 });
@@ -1133,6 +1135,333 @@ app.post('/api/quick-test', async (req, res) => {
     });
   }
 });
+
+// Add this new endpoint to your existing Express app
+
+// ===== NEW API ENDPOINT: GET GRAPH STRUCTURE AS JSON =====
+app.post('/api/graph-structure', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    const { pageId, text } = req.body;
+
+    if (!pageId || !text) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required parameters: pageId and text'
+      });
+    }
+
+    console.log(`📊 Extracting graph structure for page ${pageId} with text "${text}"`);
+
+    // Extract toggle structure using existing function
+    const toggleStructure = await fetchToggleBlockStructure({ pageId, text });
+    console.log(`✅ Toggle structure extracted in ${Date.now() - startTime}ms`);
+    
+    // Transform to graph structure with detailed content
+    const graphStructure = extractDetailedGraphStructure(toggleStructure.result);
+    console.log(`✅ Graph structure created: ${graphStructure.nodes.length} nodes`);
+
+    res.json({
+      success: true,
+      pageId,
+      searchText: text,
+      structure: graphStructure,
+      metadata: {
+        totalNodes: graphStructure.nodes.length,
+        totalEdges: graphStructure.edges.length,
+        processingTimeMs: Date.now() - startTime,
+        extractedAt: new Date().toISOString()
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error extracting graph structure:', error);
+    
+    let errorMessage = error.message;
+    if (error.message.includes('No toggle')) {
+      errorMessage = `No toggle block found containing "${req.body?.text || 'N/A'}" inside any callout block`;
+    } else if (error.message.includes('No callout')) {
+      errorMessage = 'No callout blocks found in the page. Toggle blocks must be inside callout blocks.';
+    }
+
+    res.status(500).json({
+      success: false,
+      error: errorMessage,
+      processingTimeMs: Date.now() - startTime
+    });
+  }
+});
+
+// ===== NEW FUNCTION: EXTRACT DETAILED GRAPH STRUCTURE =====
+function extractDetailedGraphStructure(toggleStructureJson) {
+  const toggleStructure = JSON.parse(toggleStructureJson);
+  const nodes = [];
+  const edges = [];
+  let nodeIdCounter = 1;
+
+  // Helper functions (reusing existing logic)
+  function isCondition(content) {
+    return /[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(content);
+  }
+  
+  function isPolicy(content) {
+    return /←\s*Policy\s*:/.test(content);
+  }
+  
+  function extractConditionTitle(content) {
+    const matchWithParens = content.match(/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition\s*\(→\s*(.+?)\s*←\)/);
+    if (matchWithParens) {
+      return matchWithParens[1].trim();
+    }
+    
+    const matchAfterCondition = content.match(/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition\s+(.+)/);
+    if (matchAfterCondition) {
+      return matchAfterCondition[1].trim();
+    }
+    
+    return content;
+  }
+  
+  function extractPolicyTitle(content, block) {
+    console.log(`🔍 Extracting policy title from: "${content}"`);
+    
+    const matchWithParens = content.match(/←\s*Policy\s*:\s*\(→\s*(.+?)\s*←\)/);
+    if (matchWithParens) {
+      const title = matchWithParens[1].trim();
+      if (title.includes('Type your Policy Name Here')) {
+        const betterTitle = getFirstWordsFromFirstListItem(block, 10);
+        if (betterTitle && betterTitle !== 'Policy') {
+          return betterTitle;
+        }
+        return 'Policy (Template)';
+      }
+      return title;
+    }
+    
+    const matchAfterPolicy = content.match(/←\s*Policy\s*:\s*(.+)/);
+    if (matchAfterPolicy) {
+      const title = matchAfterPolicy[1].trim()
+        .replace(/\s*-\s*optional title.*$/i, '')
+        .replace(/^\(→\s*/, '')
+        .replace(/\s*←\)$/, '')
+        .trim();
+      
+      if (!title || title === "Type your Policy Name Here") {
+        const betterTitle = getFirstWordsFromFirstListItem(block, 10);
+        if (betterTitle && betterTitle !== 'Policy') {
+          return betterTitle;
+        }
+        return 'Policy (Empty)';
+      }
+      return title;
+    }
+    
+    if (content.match(/←\s*Policy\s*:\s*$/)) {
+      const childTitle = getFirstWordsFromFirstListItem(block, 10);
+      if (childTitle && childTitle !== 'Policy') {
+        return childTitle;
+      }
+      return 'Policy (No Title)';
+    }
+    
+    return 'Policy (Unknown)';
+  }
+  
+  function getFirstWordsFromFirstListItem(block, wordLimit = 10) {
+    if (!block.children || block.children.length === 0) {
+      return null;
+    }
+    
+    for (const child of block.children) {
+      if (child.type === 'bulleted_list_item' || child.type === 'numbered_list_item') {
+        const listContent = child.content;
+        if (listContent && listContent.trim()) {
+          const words = listContent.trim().split(/\s+/);
+          return words.slice(0, wordLimit).join(' ');
+        }
+      }
+    }
+    return null;
+  }
+
+  function extractPolicyContent(block) {
+    if (!block.children || block.children.length === 0) {
+      return [];
+    }
+
+    const policyItems = [];
+    
+    function extractFromChildren(children, level = 0) {
+      for (const child of children) {
+        if (child.type === 'bulleted_list_item' || child.type === 'numbered_list_item') {
+          if (child.content && child.content.trim()) {
+            policyItems.push({
+              type: child.type,
+              content: child.content.trim(),
+              level: level
+            });
+          }
+        }
+        
+        // Recursively process nested children
+        if (child.children && child.children.length > 0) {
+          extractFromChildren(child.children, level + 1);
+        }
+      }
+    }
+    
+    extractFromChildren(block.children);
+    return policyItems;
+  }
+
+  function cleanText(text) {
+    return text
+      .replace(/["\[\]]/g, '')
+      .replace(/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]/g, '')
+      .replace(/^\s*←?\s*/, '')
+      .replace(/^\s*→?\s*/, '')
+      .replace(/\s*←\s*$/, '')
+      .replace(/\s*→\s*$/, '')
+      .replace(/\(\s*→\s*/, '(')
+      .replace(/\s*←\s*\)/, ')')
+      .replace(/â/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+  
+  function createStructureNode(block, parentId = null, level = 0) {
+    if (!block.content || 
+        block.content.trim() === '' || 
+        block.content === '—' || 
+        block.content === '[divider]' ||
+        block.type === 'divider' ||
+        block.type === 'unsupported') {
+      
+      if (block.children && Array.isArray(block.children)) {
+        for (const child of block.children) {
+          createStructureNode(child, parentId, level);
+        }
+      }
+      return null;
+    }
+    
+    const content = block.content.trim();
+    let shouldCreateNode = false;
+    let nodeData = null;
+    
+    console.log(`🔍 Processing block at level ${level}: "${content.substring(0, 100)}..."`);
+    
+    // Business ECP
+    if (level === 0 && content.includes('Business ECP:')) {
+      shouldCreateNode = true;
+      let cleanedContent = content
+        .replace(/Business ECP:\s*\(?\s*→?\s*/, '')
+        .replace(/\s*←?\s*\)?\s*.*$/, '')
+        .replace(/â/g, '')
+        .trim();
+      
+      if (cleanedContent.includes('TyptestECP') || cleanedContent.includes('Type')) {
+        cleanedContent = cleanedContent.replace(/TyptestECP\s*/, '').replace(/Type.*/, '').trim();
+      }
+      
+      if (!cleanedContent) cleanedContent = 'ECP Name';
+      
+      nodeData = {
+        id: String(nodeIdCounter++),
+        type: 'businessECP',
+        title: cleanedContent,
+        originalContent: content,
+        level: level,
+        parentId: parentId
+      };
+      console.log(`✅ Created Business ECP node: ${nodeData.title}`);
+    }
+    // Condition
+    else if (isCondition(content)) {
+      shouldCreateNode = true;
+      const conditionTitle = extractConditionTitle(content);
+      const cleanedContent = cleanText(conditionTitle);
+      
+      nodeData = {
+        id: String(nodeIdCounter++),
+        type: 'condition',
+        title: cleanedContent,
+        originalContent: content,
+        level: level,
+        parentId: parentId
+      };
+      console.log(`✅ Created Condition node: ${nodeData.title}`);
+    }
+    // Policy
+    else if (isPolicy(content)) {
+      console.log(`📋 Found policy block: "${content.substring(0, 100)}..."`);
+      
+      shouldCreateNode = true;
+      const policyTitle = extractPolicyTitle(content, block);
+      const policyContent = extractPolicyContent(block);
+      const cleanedTitle = cleanText(policyTitle);
+      
+      nodeData = {
+        id: String(nodeIdCounter++),
+        type: 'policy',
+        title: cleanedTitle,
+        originalContent: content,
+        content: policyContent,
+        level: level,
+        parentId: parentId
+      };
+      console.log(`✅ Created Policy node: ${nodeData.title} with ${policyContent.length} content items`);
+    }
+    
+    let currentNodeId = null;
+    
+    if (shouldCreateNode && nodeData) {
+      currentNodeId = nodeData.id;
+      nodes.push(nodeData);
+      
+      // Create edge if there's a parent
+      if (parentId) {
+        edges.push({
+          id: `edge_${parentId}_to_${currentNodeId}`,
+          source: parentId,
+          target: currentNodeId
+        });
+      }
+    }
+    
+    // Process children recursively
+    if (block.children && Array.isArray(block.children)) {
+      for (const child of block.children) {
+        createStructureNode(child, currentNodeId || parentId, level + (shouldCreateNode ? 1 : 0));
+      }
+    }
+    
+    return currentNodeId;
+  }
+  
+  console.log(`🚀 Starting detailed structure extraction...`);
+  
+  // Start processing from the root toggle block
+  createStructureNode(toggleStructure.toggleBlock);
+  
+  console.log(`📊 Created ${nodes.length} nodes and ${edges.length} edges`);
+  
+  return {
+    nodes,
+    edges,
+    metadata: {
+      totalNodes: nodes.length,
+      totalEdges: edges.length,
+      maxLevel: nodes.length > 0 ? Math.max(...nodes.map(n => n.level)) : 0,
+      nodeTypes: {
+        businessECP: nodes.filter(n => n.type === 'businessECP').length,
+        conditions: nodes.filter(n => n.type === 'condition').length,
+        policies: nodes.filter(n => n.type === 'policy').length
+      }
+    }
+  };
+}
 
 // Export for Vercel
 module.exports = app;
