@@ -266,7 +266,7 @@ async function appendGraphToNotionPage(notionPageId, graphUrl, graphTitle) {
 async function fetchToggleBlockStructure({ pageId, text }) {
   const baseUrl = 'https://api.notion.com/v1/blocks';
   const startTime = Date.now();
-  const TIMEOUT_BUFFER = 50000; // 50 seconds - removed time constraint since user doesn't care about time
+  const TIMEOUT_BUFFER = 50000; // 50 seconds
 
   const checkTimeout = () => {
     if (Date.now() - startTime > TIMEOUT_BUFFER) {
@@ -416,6 +416,12 @@ async function simplifyBlockForVercel(block, headers, depth) {
     case 'callout':
       simplified.content = extractContent(block.callout?.rich_text);
       break;
+    case 'code':
+      simplified.content = extractContent(block.code?.rich_text);
+      if (block.code?.language) {
+        simplified.language = block.code.language;
+      }
+      break;
     default:
       simplified.content = `[${block.type}]`;
       break;
@@ -449,7 +455,7 @@ async function simplifyBlockForVercel(block, headers, depth) {
   return simplified;
 }
 
-// Proper transformation function to extract real Notion content
+// ===== ENHANCED TRANSFORMATION FUNCTION FOR BUSINESS TOOLS =====
 function transformToggleToReactFlow(toggleStructureJson) {
   const toggleStructure = JSON.parse(toggleStructureJson);
   const nodes = [];
@@ -469,9 +475,19 @@ function transformToggleToReactFlow(toggleStructureJson) {
     return /[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(content);
   }
   
-  function isPolicy(content) {
-    // Check for policy patterns like "← Policy:" or "← Policy: (→ something ←)"
-    return /←\s*Policy\s*:/.test(content);
+  function isEvent(content) {
+    // Check for event patterns like "← Event"
+    return /←\s*Event/.test(content);
+  }
+  
+  function isBusinessTool(content) {
+    // Check for Business Tool patterns
+    return /Business\s*Tool/i.test(content);
+  }
+  
+  function isJsonCode(content) {
+    // Check for JSON Code patterns like "← JSON Code Required"
+    return /←\s*JSON\s*Code/.test(content);
   }
   
   function extractConditionTitle(content) {
@@ -494,78 +510,54 @@ function transformToggleToReactFlow(toggleStructureJson) {
     return content;
   }
   
-  function extractPolicyTitle(content, block) {
-    // Extract title from patterns like:
-    // "← Policy: (→ policy name ←)" -> "policy name"
+  function extractEventTitle(content, block) {
+    // Extract title from patterns like "← Event"
+    console.log(`🔍 Extracting event title from: "${content}"`);
     
-    console.log(`🔍 Extracting policy title from: "${content}"`);
-    
-    // First try to match with parentheses
-    const matchWithParens = content.match(/←\s*Policy\s*:\s*\(→\s*(.+?)\s*←\)/);
-    if (matchWithParens) {
-      const title = matchWithParens[1].trim();
-      console.log(`✅ Found policy title in parentheses: "${title}"`);
-      
-      // Even if it's a placeholder, we'll show it and try to get better content from children
-      if (title.includes('Type your Policy Name Here')) {
-        const betterTitle = getFirstFiveWordsFromFirstListItem(block);
-        if (betterTitle && betterTitle !== 'Policy') {
-          console.log(`✅ Found better policy title from children: "${betterTitle}"`);
-          return betterTitle;
-        }
-        return 'Policy (Template)'; // Show even template policies
+    // Check if it's just "← Event" without additional content
+    if (content.match(/^\s*←\s*Event\s*$/)) {
+      console.log(`🔍 Simple event found, checking children...`);
+      const childTitle = getFirstWordsFromFirstListItem(block, 10);
+      if (childTitle && childTitle !== 'Event') {
+        console.log(`✅ Found event title from children: "${childTitle}"`);
+        return childTitle;
       }
-      
+      return 'Event (No Title)';
+    }
+    
+    // Try to extract content after "← Event"
+    const matchAfterEvent = content.match(/←\s*Event\s+(.+)/);
+    if (matchAfterEvent) {
+      const title = matchAfterEvent[1].trim();
+      console.log(`✅ Found event title after Event: "${title}"`);
       return title;
     }
     
-    // Then try to match everything after "← Policy: "
-    const matchAfterPolicy = content.match(/←\s*Policy\s*:\s*(.+)/);
-    if (matchAfterPolicy) {
-      const title = matchAfterPolicy[1].trim();
-      console.log(`✅ Found policy title after colon: "${title}"`);
-      
-      // Clean up common patterns
-      const cleanedTitle = title
-        .replace(/\s*-\s*optional title.*$/i, '')
-        .replace(/^\(→\s*/, '')
-        .replace(/\s*←\)$/, '')
-        .trim();
-      
-      if (!cleanedTitle || cleanedTitle === "Type your Policy Name Here") {
-        const betterTitle = getFirstFiveWordsFromFirstListItem(block);
-        if (betterTitle && betterTitle !== 'Policy') {
-          console.log(`✅ Found better policy title from children: "${betterTitle}"`);
-          return betterTitle;
-        }
-        return 'Policy (Empty)'; // Show even empty policies
-      }
-      
-      return cleanedTitle;
-    }
-    
-    // Handle cases without anything after colon like "← Policy:" or "← Policy: "
-    if (content.match(/←\s*Policy\s*:\s*$/)) {
-      console.log(`🔍 Empty policy found, checking children...`);
-      const childTitle = getFirstFiveWordsFromFirstListItem(block);
-      if (childTitle && childTitle !== 'Policy') {
-        console.log(`✅ Found policy title from children: "${childTitle}"`);
-        return childTitle;
-      }
-      return 'Policy (No Title)'; // Show even untitled policies
-    }
-    
-    console.log(`⚠️ Could not extract policy title from: "${content}"`);
-    return 'Policy (Unknown)';
+    console.log(`⚠️ Could not extract event title from: "${content}"`);
+    return 'Event (Unknown)';
   }
   
-  function getFirstFiveWordsFromFirstListItem(block) {
+  function extractJsonCodeTitle(content, block) {
+    // Extract title from patterns like "← JSON Code Required"
+    console.log(`🔍 Extracting JSON Code title from: "${content}"`);
+    
+    // Check for various JSON code patterns
+    const matchJsonCode = content.match(/←\s*JSON\s*Code\s*(.*)/);
+    if (matchJsonCode) {
+      const title = matchJsonCode[1].trim() || 'Required';
+      console.log(`✅ Found JSON Code title: "${title}"`);
+      return `JSON Code ${title}`;
+    }
+    
+    return 'JSON Code';
+  }
+  
+  function getFirstWordsFromFirstListItem(block, wordLimit = 10) {
     if (!block.children || block.children.length === 0) {
-      console.log(`⚠️ No children found for policy block`);
       return null;
     }
     
-    console.log(`🔍 Checking ${block.children.length} children for policy content...`);
+    console.log(`🔍 Checking ${block.children.length} children for content...`);
     
     // Find the first list item (bulleted_list_item or numbered_list_item)
     for (const child of block.children) {
@@ -575,49 +567,23 @@ function transformToggleToReactFlow(toggleStructureJson) {
         
         if (listContent && listContent.trim()) {
           const words = listContent.trim().split(/\s+/);
-          const firstFiveWords = words.slice(0, 5).join(' ');
-          console.log(`✅ Extracted first 5 words: "${firstFiveWords}"`);
-          return firstFiveWords || "List Content";
+          const firstWords = words.slice(0, wordLimit).join(' ');
+          console.log(`✅ Extracted first ${wordLimit} words: "${firstWords}"`);
+          return firstWords || "List Content";
+        }
+      }
+      // Also check code blocks for JSON Code
+      else if (child.type === 'code') {
+        const codeContent = child.content;
+        console.log(`💻 Found code block with content: "${codeContent}"`);
+        if (codeContent && codeContent.trim()) {
+          return "Code Block";
         }
       }
     }
     
-    console.log(`⚠️ No meaningful list content found`);
+    console.log(`⚠️ No meaningful content found`);
     return null;
-  }
-  
-  function isPolicyEmpty(block) {
-    // We'll be more lenient - show policies even if they seem "empty"
-    // Only skip if there's absolutely no content structure
-    
-    if (!block.children || block.children.length === 0) {
-      console.log(`📋 Policy has no children - will still show as placeholder`);
-      return false; // Don't skip - show as placeholder
-    }
-    
-    // Check if all list children are completely empty
-    const listItems = block.children.filter(child => 
-      child.type === 'bulleted_list_item' || child.type === 'numbered_list_item'
-    );
-    
-    if (listItems.length === 0) {
-      console.log(`📋 Policy has children but no list items - will still show`);
-      return false; // Don't skip - might have other content
-    }
-    
-    // Only consider it truly empty if ALL list items are completely empty
-    const allEmpty = listItems.every(item => {
-      const content = item.content;
-      return !content || !content.trim();
-    });
-    
-    if (allEmpty) {
-      console.log(`📋 All policy list items are empty - will still show as template`);
-      return false; // Even completely empty policies should be shown
-    }
-    
-    console.log(`📋 Policy has some content in list items`);
-    return false; // Never skip policies
   }
   
   function cleanText(text) {
@@ -662,29 +628,22 @@ function transformToggleToReactFlow(toggleStructureJson) {
     
     console.log(`🔍 Processing block at level ${level}: "${content.substring(0, 100)}..."`);
     
-    // Check if this is a Business ECP root node
-    if (level === 0 && content.includes('Business ECP:')) {
+    // Check if this is a Business Tool root node
+    if (level === 0 && isBusinessTool(content)) {
       shouldCreateNode = true;
-      // Extract the ECP name from patterns like "Business ECP: (→ TyptestECP Name Here ←)"
+      // Extract the tool name from patterns like "Business Tool" or "Business Tool: XYZ"
       let cleanedContent = content
-        .replace(/Business ECP:\s*\(?\s*→?\s*/, '')
-        .replace(/\s*←?\s*\)?\s*.*$/, '')
-        .replace(/â/g, '')
+        .replace(/Business\s*Tool\s*:?\s*/i, '')
         .trim();
       
-      // If still contains placeholder text, clean it up
-      if (cleanedContent.includes('TyptestECP') || cleanedContent.includes('Type')) {
-        cleanedContent = cleanedContent.replace(/TyptestECP\s*/, '').replace(/Type.*/, '').trim();
-      }
-      
-      if (!cleanedContent) cleanedContent = 'ECP Name';
+      if (!cleanedContent) cleanedContent = 'Tool';
       
       nodeData = {
-        label: `🏢 Business ECP: ${cleanedContent}`,
+        label: `🛠️ Business Tool: ${cleanedContent}`,
         originalContent: content,
         cleanedContent: cleanedContent,
         blockType: block.type,
-        nodeType: 'businessECP',
+        nodeType: 'businessTool',
         depth: level
       };
       nodeStyle = {
@@ -700,7 +659,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
         textAlign: 'center',
         color: 'white'
       };
-      console.log(`✅ Created Business ECP node: ${nodeData.label}`);
+      console.log(`✅ Created Business Tool node: ${nodeData.label}`);
     }
     // Check if it's a condition
     else if (isCondition(content)) {
@@ -731,23 +690,22 @@ function transformToggleToReactFlow(toggleStructureJson) {
       };
       console.log(`✅ Created Condition node: ${nodeData.label}`);
     }
-    // Check if it's a policy
-    else if (isPolicy(content)) {
-      console.log(`📋 Found policy block: "${content.substring(0, 100)}..."`);
+    // Check if it's an event
+    else if (isEvent(content)) {
+      console.log(`📅 Found event block: "${content.substring(0, 100)}..."`);
       
-      const policyTitle = extractPolicyTitle(content, block);
-      console.log(`📋 Extracted policy title: "${policyTitle}"`);
+      const eventTitle = extractEventTitle(content, block);
+      console.log(`📅 Extracted event title: "${eventTitle}"`);
       
-      // Always create policy nodes - don't skip any
       shouldCreateNode = true;
-      const cleanedContent = cleanText(policyTitle);
+      const cleanedContent = cleanText(eventTitle);
       
       nodeData = {
-        label: `📋 ${cleanedContent}`,
+        label: `📅 ${cleanedContent}`,
         originalContent: content,
         cleanedContent: cleanedContent,
         blockType: block.type,
-        nodeType: 'policy',
+        nodeType: 'event',
         depth: level
       };
       nodeStyle = {
@@ -763,7 +721,40 @@ function transformToggleToReactFlow(toggleStructureJson) {
         textAlign: 'center',
         color: '#2d3748'
       };
-      console.log(`✅ Created Policy node: ${nodeData.label}`);
+      console.log(`✅ Created Event node: ${nodeData.label}`);
+    }
+    // Check if it's JSON code
+    else if (isJsonCode(content)) {
+      console.log(`💻 Found JSON Code block: "${content.substring(0, 100)}..."`);
+      
+      const jsonTitle = extractJsonCodeTitle(content, block);
+      console.log(`💻 Extracted JSON Code title: "${jsonTitle}"`);
+      
+      shouldCreateNode = true;
+      const cleanedContent = cleanText(jsonTitle);
+      
+      nodeData = {
+        label: `💻 ${cleanedContent}`,
+        originalContent: content,
+        cleanedContent: cleanedContent,
+        blockType: block.type,
+        nodeType: 'jsonCode',
+        depth: level
+      };
+      nodeStyle = {
+        background: 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)',
+        border: 'none',
+        borderRadius: '12px',
+        fontSize: '14px',
+        fontWeight: '600',
+        padding: '18px 22px',
+        minWidth: '200px',
+        maxWidth: '300px',
+        boxShadow: '0 6px 20px rgba(255, 154, 158, 0.3)',
+        textAlign: 'center',
+        color: '#7c2d12'
+      };
+      console.log(`✅ Created JSON Code node: ${nodeData.label}`);
     }
     else {
       // Log blocks that don't match our patterns
@@ -808,7 +799,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
           animated: true
         };
         
-        if (nodeData.nodeType === 'policy') {
+        if (nodeData.nodeType === 'event') {
           edgeStyle.stroke = '#4fd1c7';
           edgeStyle.strokeWidth = 2;
           edgeStyle.animated = false;
@@ -817,6 +808,11 @@ function transformToggleToReactFlow(toggleStructureJson) {
           edgeStyle.stroke = '#a5b4fc';
           edgeStyle.strokeWidth = 2;
           edgeStyle.animated = false;
+        } else if (nodeData.nodeType === 'jsonCode') {
+          edgeStyle.stroke = '#ff9a9e';
+          edgeStyle.strokeWidth = 2;
+          edgeStyle.animated = false;
+          edgeStyle.strokeDasharray = '5,5';
         }
         
         edges.push({
@@ -893,10 +889,11 @@ function transformToggleToReactFlow(toggleStructureJson) {
   
   // Count node types for metadata
   const nodeTypes = {
-    businessECP: nodes.filter(n => n.data.nodeType === 'businessECP').length,
+    businessTool: nodes.filter(n => n.data.nodeType === 'businessTool').length,
     conditions: nodes.filter(n => n.data.nodeType === 'condition').length,
-    policies: nodes.filter(n => n.data.nodeType === 'policy').length,
-    other: nodes.filter(n => !['businessECP', 'condition', 'policy'].includes(n.data.nodeType)).length
+    events: nodes.filter(n => n.data.nodeType === 'event').length,
+    jsonCode: nodes.filter(n => n.data.nodeType === 'jsonCode').length,
+    other: nodes.filter(n => !['businessTool', 'condition', 'event', 'jsonCode'].includes(n.data.nodeType)).length
   };
   
   console.log(`📈 Node breakdown: ${JSON.stringify(nodeTypes)}`);
@@ -912,8 +909,9 @@ function transformToggleToReactFlow(toggleStructureJson) {
       nodeTypes: nodeTypes,
       layout: 'topToBottom',
       processingRules: {
-        ignoredEmptyPolicies: true,
+        extractedEvents: true,
         extractedConditionNumbers: true,
+        extractedJsonCode: true,
         cleanedContent: true,
         centeredLayout: true,
         improvedSpacing: true
@@ -927,19 +925,20 @@ function transformToggleToReactFlow(toggleStructureJson) {
 // Root route for Vercel
 app.get('/', (req, res) => {
   res.json({
-    message: 'Notion Graph Proxy Service - Vercel Deployment',
+    message: 'Notion Graph Proxy Service - Enhanced Business Tool Support',
     status: 'running',
     timestamp: new Date().toISOString(),
     firebase: isFirebaseEnabled ? 'enabled' : 'disabled (using memory)',
     notion: NOTION_TOKEN ? 'configured' : 'missing',
+    supportedTypes: ['Business ECP', 'Business Tool', 'Conditions', 'Policies', 'Events', 'JSON Code'],
     endpoints: [
       'GET /health',
       'GET /api/firebase-status', 
       'POST /api/create-graph',
+      'POST /api/create-business-tool-graph',
       'POST /api/quick-test',
       'POST /api/graph-structure',
       'GET /api/graph-data/:pageId'
-      
     ]
   });
 });
@@ -953,7 +952,8 @@ app.get('/health', (req, res) => {
     firebase: isFirebaseEnabled ? 'connected' : 'memory-fallback',
     notion: NOTION_TOKEN ? 'configured' : 'missing',
     storage: isFirebaseEnabled ? 'firestore' : 'memory',
-    memoryGraphs: graphStorage.size
+    memoryGraphs: graphStorage.size,
+    supportedGraphTypes: ['businessECP', 'businessTool']
   });
 });
 
@@ -1005,7 +1005,108 @@ app.get('/api/graph-data/:pageId', async (req, res) => {
   }
 });
 
-// Create graph - Main API endpoint
+// ===== NEW ENDPOINT: CREATE BUSINESS TOOL GRAPH =====
+app.post('/api/create-business-tool-graph', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    const { pageId, text = 'Business Tool' } = req.body;
+
+    if (!pageId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required parameter: pageId'
+      });
+    }
+
+    console.log(`🛠️ Creating Business Tool graph for page ${pageId} with text "${text}"`);
+
+    // Extract and transform with timeout protection
+    const toggleStructure = await fetchToggleBlockStructure({ pageId, text });
+    console.log(`✅ Toggle structure extracted in ${Date.now() - startTime}ms`);
+    
+    const graphData = transformToggleToReactFlow(toggleStructure.result);
+    console.log(`✅ Graph transformed: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges`);
+    
+    const cleanedGraphData = sanitizeGraphData(graphData);
+
+    // Store with unique ID
+    const uniquePageId = `business-tool-${pageId}-${Date.now()}`;
+    await saveGraphToFirestore(uniquePageId, cleanedGraphData);
+    console.log(`✅ Graph stored with ID: ${uniquePageId}`);
+
+    // Generate URL
+    const graphUrl = generateGraphUrl(uniquePageId);
+    console.log(`🔗 Generated graph URL: ${graphUrl}`);
+
+    // ✨ APPEND GRAPH TO NOTION PAGE ✨
+    try {
+      const graphTitle = `🛠️ Business Tool Flow: ${text}`;
+      const appendResult = await appendGraphToNotionPage(pageId, graphUrl, graphTitle);
+      console.log(`✅ Graph successfully added to Notion page`);
+      
+      res.json({
+        success: true,
+        graphUrl: graphUrl,
+        graphId: uniquePageId,
+        graphType: 'businessTool',
+        stats: {
+          nodes: cleanedGraphData.nodes.length,
+          edges: cleanedGraphData.edges.length,
+          nodeTypes: cleanedGraphData.metadata.nodeTypes,
+          storage: isFirebaseEnabled ? 'firebase' : 'memory',
+          processingTimeMs: Date.now() - startTime
+        },
+        notionResult: appendResult,
+        message: `✅ Business Tool graph created and added to Notion page successfully! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'}`
+      });
+      
+    } catch (notionError) {
+      console.error('❌ Failed to add graph to Notion page:', notionError);
+      
+      // Still return success for graph creation, but note the Notion error
+      res.json({
+        success: true,
+        graphUrl: graphUrl,
+        graphId: uniquePageId,
+        graphType: 'businessTool',
+        stats: {
+          nodes: cleanedGraphData.nodes.length,
+          edges: cleanedGraphData.edges.length,
+          nodeTypes: cleanedGraphData.metadata.nodeTypes,
+          storage: isFirebaseEnabled ? 'firebase' : 'memory',
+          processingTimeMs: Date.now() - startTime
+        },
+        warning: `Graph created but failed to add to Notion page: ${notionError.message}`,
+        message: `⚠️ Business Tool graph created successfully but couldn't add to Notion page. You can access it directly via the URL.`
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Error creating Business Tool graph:', error);
+    
+    let errorMessage = error.message;
+    if (error.message.includes('No toggle')) {
+      errorMessage = `No toggle block found containing "${req.body?.text || 'Business Tool'}" inside any callout block`;
+    } else if (error.message.includes('No callout')) {
+      errorMessage = 'No callout blocks found in the page. Toggle blocks must be inside callout blocks.';
+    } else if (error.message.includes('timed out')) {
+      errorMessage = 'Request timed out - the toggle structure is too complex for serverless functions';
+    } else if (error.message.includes('Failed to fetch page')) {
+      errorMessage = 'Could not access the Notion page. Check the page ID and permissions.';
+    }
+
+    res.status(500).json({
+      success: false,
+      error: errorMessage,
+      graphType: 'businessTool',
+      platform: 'vercel',
+      processingTimeMs: Date.now() - startTime
+    });
+  }
+});
+
+// Create graph - Main API endpoint (existing functionality for Business ECP)
 app.post('/api/create-graph', async (req, res) => {
   const startTime = Date.now();
   
@@ -1105,12 +1206,12 @@ app.post('/api/create-graph', async (req, res) => {
 app.post('/api/quick-test', async (req, res) => {
   try {
     const testPageId = '2117432eb8438055a473fc7198dc3fdc';
-    const testText = 'Business ECP:';
+    const testText = 'Business Tool';
     
-    console.log('🧪 Running quick test with hardcoded values...');
+    console.log('🧪 Running quick test with Business Tool...');
     
-    // Call our own create-graph endpoint
-    const createResponse = await fetch(`${req.protocol}://${req.get('host')}/api/create-graph`, {
+    // Call our own create-business-tool-graph endpoint
+    const createResponse = await fetch(`${req.protocol}://${req.get('host')}/api/create-business-tool-graph`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pageId: testPageId, text: testText })
@@ -1121,6 +1222,7 @@ app.post('/api/quick-test', async (req, res) => {
     res.json({
       ...data,
       testMode: true,
+      testType: 'businessTool',
       platform: 'vercel',
       firebase: isFirebaseEnabled ? 'enabled' : 'memory-fallback'
     });
@@ -1131,6 +1233,7 @@ app.post('/api/quick-test', async (req, res) => {
       success: false,
       error: error.message,
       testMode: true,
+      testType: 'businessTool',
       platform: 'vercel'
     });
   }
@@ -1180,8 +1283,7 @@ app.post('/api/graph-structure', async (req, res) => {
   }
 });
 
-// NEW FUNCTION: Extract simplified graph structure
-// NEW FUNCTION: Extract simplified graph structure
+// NEW FUNCTION: Extract simplified graph structure for Business Tools
 function extractSimplifiedGraphStructure(toggleStructureJson) {
   const toggleStructure = JSON.parse(toggleStructureJson);
   const nodes = [];
@@ -1192,11 +1294,19 @@ function extractSimplifiedGraphStructure(toggleStructureJson) {
     return /[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(content);
   }
   
-  function isPolicy(content) {
-    return /←\s*Policy\s*:/.test(content);
+  function isEvent(content) {
+    return /←\s*Event/.test(content);
   }
 
-  function extractPolicyContentAsString(block) {
+  function isBusinessTool(content) {
+    return /Business\s*Tool/i.test(content);
+  }
+
+  function isJsonCode(content) {
+    return /←\s*JSON\s*Code/.test(content);
+  }
+
+  function extractEventContentAsString(block) {
     if (!block.children || block.children.length === 0) {
       return "";
     }
@@ -1208,6 +1318,10 @@ function extractSimplifiedGraphStructure(toggleStructureJson) {
         if (child.type === 'bulleted_list_item' || child.type === 'numbered_list_item') {
           if (child.content && child.content.trim()) {
             contentItems.push(child.content.trim());
+          }
+        } else if (child.type === 'code') {
+          if (child.content && child.content.trim()) {
+            contentItems.push(`[CODE: ${child.content.trim()}]`);
           }
         }
         
@@ -1246,19 +1360,19 @@ function extractSimplifiedGraphStructure(toggleStructureJson) {
     
     console.log(`🔍 Processing block at level ${level}: "${content.substring(0, 100)}..." (Block ID: ${block.id})`);
     
-    // Business ECP
-    if (level === 0 && content.includes('Business ECP:')) {
+    // Business Tool
+    if (level === 0 && isBusinessTool(content)) {
       shouldCreateNode = true;
       
       nodeData = {
         id: String(nodeIdCounter++),
-        type: 'businessECP',
+        type: 'businessTool',
         title: content, // Use original content as title
         level: level,
         parentId: parentId,
         notionBlockId: block.id
       };
-      console.log(`✅ Created Business ECP node (Block ID: ${block.id})`);
+      console.log(`✅ Created Business Tool node (Block ID: ${block.id})`);
     }
     // Condition
     else if (isCondition(content)) {
@@ -1274,23 +1388,41 @@ function extractSimplifiedGraphStructure(toggleStructureJson) {
       };
       console.log(`✅ Created Condition node (Block ID: ${block.id})`);
     }
-    // Policy
-    else if (isPolicy(content)) {
-      console.log(`📋 Found policy block: "${content.substring(0, 100)}..." (Block ID: ${block.id})`);
+    // Event
+    else if (isEvent(content)) {
+      console.log(`📅 Found event block: "${content.substring(0, 100)}..." (Block ID: ${block.id})`);
       
       shouldCreateNode = true;
-      const policyContentString = extractPolicyContentAsString(block);
+      const eventContentString = extractEventContentAsString(block);
       
       nodeData = {
         id: String(nodeIdCounter++),
-        type: 'policy',
+        type: 'event',
         title: content, // Use original content as title
-        content: policyContentString, // Single string instead of array
+        content: eventContentString, // Single string instead of array
         level: level,
         parentId: parentId,
         notionBlockId: block.id
       };
-      console.log(`✅ Created Policy node with content length: ${policyContentString.length} chars (Block ID: ${block.id})`);
+      console.log(`✅ Created Event node with content length: ${eventContentString.length} chars (Block ID: ${block.id})`);
+    }
+    // JSON Code
+    else if (isJsonCode(content)) {
+      console.log(`💻 Found JSON Code block: "${content.substring(0, 100)}..." (Block ID: ${block.id})`);
+      
+      shouldCreateNode = true;
+      const jsonContentString = extractEventContentAsString(block);
+      
+      nodeData = {
+        id: String(nodeIdCounter++),
+        type: 'jsonCode',
+        title: content, // Use original content as title
+        content: jsonContentString, // Single string for code content
+        level: level,
+        parentId: parentId,
+        notionBlockId: block.id
+      };
+      console.log(`✅ Created JSON Code node with content length: ${jsonContentString.length} chars (Block ID: ${block.id})`);
     }
     
     let currentNodeId = null;
@@ -1319,278 +1451,6 @@ function extractSimplifiedGraphStructure(toggleStructureJson) {
   
   return nodes;
 }
-// ===== NEW FUNCTION: EXTRACT DETAILED GRAPH STRUCTURE =====
-function extractDetailedGraphStructure(toggleStructureJson) {
-  const toggleStructure = JSON.parse(toggleStructureJson);
-  const nodes = [];
-  const edges = [];
-  let nodeIdCounter = 1;
-
-  // Helper functions (reusing existing logic)
-  function isCondition(content) {
-    return /[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(content);
-  }
-  
-  function isPolicy(content) {
-    return /←\s*Policy\s*:/.test(content);
-  }
-  
-  function extractConditionTitle(content) {
-    const matchWithParens = content.match(/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition\s*\(→\s*(.+?)\s*←\)/);
-    if (matchWithParens) {
-      return matchWithParens[1].trim();
-    }
-    
-    const matchAfterCondition = content.match(/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition\s+(.+)/);
-    if (matchAfterCondition) {
-      return matchAfterCondition[1].trim();
-    }
-    
-    return content;
-  }
-  
-  function extractPolicyTitle(content, block) {
-    console.log(`🔍 Extracting policy title from: "${content}"`);
-    
-    const matchWithParens = content.match(/←\s*Policy\s*:\s*\(→\s*(.+?)\s*←\)/);
-    if (matchWithParens) {
-      const title = matchWithParens[1].trim();
-      if (title.includes('Type your Policy Name Here')) {
-        const betterTitle = getFirstWordsFromFirstListItem(block, 10);
-        if (betterTitle && betterTitle !== 'Policy') {
-          return betterTitle;
-        }
-        return 'Policy (Template)';
-      }
-      return title;
-    }
-    
-    const matchAfterPolicy = content.match(/←\s*Policy\s*:\s*(.+)/);
-    if (matchAfterPolicy) {
-      const title = matchAfterPolicy[1].trim()
-        .replace(/\s*-\s*optional title.*$/i, '')
-        .replace(/^\(→\s*/, '')
-        .replace(/\s*←\)$/, '')
-        .trim();
-      
-      if (!title || title === "Type your Policy Name Here") {
-        const betterTitle = getFirstWordsFromFirstListItem(block, 10);
-        if (betterTitle && betterTitle !== 'Policy') {
-          return betterTitle;
-        }
-        return 'Policy (Empty)';
-      }
-      return title;
-    }
-    
-    if (content.match(/←\s*Policy\s*:\s*$/)) {
-      const childTitle = getFirstWordsFromFirstListItem(block, 10);
-      if (childTitle && childTitle !== 'Policy') {
-        return childTitle;
-      }
-      return 'Policy (No Title)';
-    }
-    
-    return 'Policy (Unknown)';
-  }
-  
-  function getFirstWordsFromFirstListItem(block, wordLimit = 10) {
-    if (!block.children || block.children.length === 0) {
-      return null;
-    }
-    
-    for (const child of block.children) {
-      if (child.type === 'bulleted_list_item' || child.type === 'numbered_list_item') {
-        const listContent = child.content;
-        if (listContent && listContent.trim()) {
-          const words = listContent.trim().split(/\s+/);
-          return words.slice(0, wordLimit).join(' ');
-        }
-      }
-    }
-    return null;
-  }
-
-  function extractPolicyContent(block) {
-    if (!block.children || block.children.length === 0) {
-      return [];
-    }
-  
-    const policyItems = [];
-    
-    function extractFromChildren(children, level = 0) {
-      for (const child of children) {
-        if (child.type === 'bulleted_list_item' || child.type === 'numbered_list_item') {
-          if (child.content && child.content.trim()) {
-            policyItems.push({
-              type: child.type,
-              content: child.content.trim(),
-              level: level,
-              notionBlockId: child.id  // ✨ ADD NOTION BLOCK ID TO CONTENT ITEMS
-            });
-          }
-        }
-        
-        // Recursively process nested children
-        if (child.children && child.children.length > 0) {
-          extractFromChildren(child.children, level + 1);
-        }
-      }
-    }
-    
-    extractFromChildren(block.children);
-    return policyItems;
-  }
-
-  function cleanText(text) {
-    return text
-      .replace(/["\[\]]/g, '')
-      .replace(/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]/g, '')
-      .replace(/^\s*←?\s*/, '')
-      .replace(/^\s*→?\s*/, '')
-      .replace(/\s*←\s*$/, '')
-      .replace(/\s*→\s*$/, '')
-      .replace(/\(\s*→\s*/, '(')
-      .replace(/\s*←\s*\)/, ')')
-      .replace(/â/g, '')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-  
-  function createStructureNode(block, parentId = null, level = 0) {
-    if (!block.content || 
-        block.content.trim() === '' || 
-        block.content === '—' || 
-        block.content === '[divider]' ||
-        block.type === 'divider' ||
-        block.type === 'unsupported') {
-      
-      if (block.children && Array.isArray(block.children)) {
-        for (const child of block.children) {
-          createStructureNode(child, parentId, level);
-        }
-      }
-      return null;
-    }
-    
-    const content = block.content.trim();
-    let shouldCreateNode = false;
-    let nodeData = null;
-    
-    console.log(`🔍 Processing block at level ${level}: "${content.substring(0, 100)}..." (Block ID: ${block.id})`);
-    
-    // Business ECP
-    if (level === 0 && content.includes('Business ECP:')) {
-      shouldCreateNode = true;
-      let cleanedContent = content
-        .replace(/Business ECP:\s*\(?\s*→?\s*/, '')
-        .replace(/\s*←?\s*\)?\s*.*$/, '')
-        .replace(/â/g, '')
-        .trim();
-      
-      if (cleanedContent.includes('TyptestECP') || cleanedContent.includes('Type')) {
-        cleanedContent = cleanedContent.replace(/TyptestECP\s*/, '').replace(/Type.*/, '').trim();
-      }
-      
-      if (!cleanedContent) cleanedContent = 'ECP Name';
-      
-      nodeData = {
-        id: String(nodeIdCounter++),
-        type: 'businessECP',
-        title: cleanedContent,
-        originalContent: content,
-        level: level,
-        parentId: parentId,
-        notionBlockId: block.id  // ✨ ADD NOTION BLOCK ID
-      };
-      console.log(`✅ Created Business ECP node: ${nodeData.title} (Block ID: ${block.id})`);
-    }
-    // Condition
-    else if (isCondition(content)) {
-      shouldCreateNode = true;
-      const conditionTitle = extractConditionTitle(content);
-      const cleanedContent = cleanText(conditionTitle);
-      
-      nodeData = {
-        id: String(nodeIdCounter++),
-        type: 'condition',
-        title: cleanedContent,
-        originalContent: content,
-        level: level,
-        parentId: parentId,
-        notionBlockId: block.id  // ✨ ADD NOTION BLOCK ID
-      };
-      console.log(`✅ Created Condition node: ${nodeData.title} (Block ID: ${block.id})`);
-    }
-    // Policy
-    else if (isPolicy(content)) {
-      console.log(`📋 Found policy block: "${content.substring(0, 100)}..." (Block ID: ${block.id})`);
-      
-      shouldCreateNode = true;
-      const policyTitle = extractPolicyTitle(content, block);
-      const policyContent = extractPolicyContent(block);
-      const cleanedTitle = cleanText(policyTitle);
-      
-      nodeData = {
-        id: String(nodeIdCounter++),
-        type: 'policy',
-        title: cleanedTitle,
-        originalContent: content,
-        content: policyContent,
-        level: level,
-        parentId: parentId,
-        notionBlockId: block.id  // ✨ ADD NOTION BLOCK ID
-      };
-      console.log(`✅ Created Policy node: ${nodeData.title} with ${policyContent.length} content items (Block ID: ${block.id})`);
-    }
-    
-    let currentNodeId = null;
-    
-    if (shouldCreateNode && nodeData) {
-      currentNodeId = nodeData.id;
-      nodes.push(nodeData);
-      
-      // Create edge if there's a parent
-      if (parentId) {
-        edges.push({
-          id: `edge_${parentId}_to_${currentNodeId}`,
-          source: parentId,
-          target: currentNodeId
-        });
-      }
-    }
-    
-    // Process children recursively
-    if (block.children && Array.isArray(block.children)) {
-      for (const child of block.children) {
-        createStructureNode(child, currentNodeId || parentId, level + (shouldCreateNode ? 1 : 0));
-      }
-    }
-    
-    return currentNodeId;
-  }
-  console.log(`🚀 Starting detailed structure extraction...`);
-  
-  // Start processing from the root toggle block
-  createStructureNode(toggleStructure.toggleBlock);
-  
-  console.log(`📊 Created ${nodes.length} nodes and ${edges.length} edges`);
-  
-  return {
-    nodes,
-    edges,
-    metadata: {
-      totalNodes: nodes.length,
-      totalEdges: edges.length,
-      maxLevel: nodes.length > 0 ? Math.max(...nodes.map(n => n.level)) : 0,
-      nodeTypes: {
-        businessECP: nodes.filter(n => n.type === 'businessECP').length,
-        conditions: nodes.filter(n => n.type === 'condition').length,
-        policies: nodes.filter(n => n.type === 'policy').length
-      }
-    }
-  };
-}
 
 // Export for Vercel
 module.exports = app;
@@ -1602,5 +1462,6 @@ if (require.main === module) {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`🔥 Firebase: ${isFirebaseEnabled ? 'Enabled' : 'Memory fallback'}`);
     console.log(`📝 Notion: ${NOTION_TOKEN ? 'Configured' : 'Missing'}`);
+    console.log(`🛠️ Business Tool support: Enabled`);
   });
 }
