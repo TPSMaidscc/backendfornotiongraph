@@ -2,112 +2,151 @@ import requests
 import json
 from datetime import datetime
 
-def test_ecp_structure_api():
-    # API configuration
-    BASE_URL = "https://backendfornotiongraph.vercel.app"  # Your Vercel backend
-    ENDPOINT = "/api/ecp-structure"
+def test_graph_structure_api():
+    """
+    Test the new /api/graph-structure endpoint
+    """
+    
+    # API Configuration
+    BASE_URL = "https://backendfornotiongraph.vercel.app"  # Replace with your actual Vercel URL
+    # For local testing, use: BASE_URL = "http://localhost:3002"
+    
+    ENDPOINT = f"{BASE_URL}/api/graph-structure"
     
     # Test data
-    payload = {
-        "pageId": "2117432eb84380768024ee386b9bc3a5",  # Your test page ID
+    test_data = {
+        "pageId": "2117432eb84380768024ee386b9bc3a5",  # Replace with your actual page ID
         "text": "Business ECP:"
     }
     
-    headers = {
-        "Content-Type": "application/json"
-    }
-    
-    print(f"🚀 Testing ECP Structure API...")
-    print(f"📡 URL: {BASE_URL}{ENDPOINT}")
-    print(f"📄 Page ID: {payload['pageId']}")
-    print(f"🔍 Search Text: {payload['text']}")
+    print("🚀 Testing Graph Structure API")
+    print(f"URL: {ENDPOINT}")
+    print(f"Payload: {json.dumps(test_data, indent=2)}")
     print("-" * 50)
     
     try:
-        # Make the API call
+        # Make the API request
         print("📡 Sending request...")
         response = requests.post(
-            f"{BASE_URL}{ENDPOINT}",
-            json=payload,
-            headers=headers,
+            ENDPOINT,
+            json=test_data,
+            headers={"Content-Type": "application/json"},
             timeout=60  # 60 second timeout
         )
         
-        print(f"📊 Response Status: {response.status_code}")
+        # Check response status
+        print(f"📊 Status Code: {response.status_code}")
         
         if response.status_code == 200:
+            # Parse JSON response
             data = response.json()
             
-            if data.get("success"):
-                structure = data.get("structure", {})
-                
-                print("✅ SUCCESS! ECP Structure extracted:")
-                print("-" * 50)
-                
-                # Business ECP
-                if structure.get("businessECP"):
-                    ecp = structure["businessECP"]
-                    print(f"🏢 Business ECP: {ecp['title']}")
-                    print(f"   ID: {ecp['id']}")
-                    print(f"   Depth: {ecp['depth']}")
-                    print()
-                
-                # Conditions
-                conditions = structure.get("conditions", [])
-                print(f"❓ Conditions ({len(conditions)}):")
-                for i, condition in enumerate(conditions, 1):
-                    print(f"   {i}. {condition['title']}")
-                    print(f"      ID: {condition['id']}")
-                    print(f"      Depth: {condition['depth']}")
-                    if condition.get('content'):
-                        print(f"      Content: {condition['content'][:2]}...")  # First 2 items
-                    if condition.get('childPolicies'):
-                        print(f"      Child Policies: {len(condition['childPolicies'])}")
-                    print()
-                
-                # Policies
-                policies = structure.get("policies", [])
-                print(f"📋 Policies ({len(policies)}):")
-                for i, policy in enumerate(policies, 1):
-                    print(f"   {i}. {policy['title']}")
-                    print(f"      ID: {policy['id']}")
-                    print(f"      Depth: {policy['depth']}")
-                    if policy.get('content'):
-                        print(f"      Content: {policy['content'][:2]}...")  # First 2 items
-                    print()
-                
-                # Metadata
-                metadata = structure.get("metadata", {})
-                print(f"📊 Metadata:")
-                print(f"   Total Conditions: {metadata.get('totalConditions', 0)}")
-                print(f"   Total Policies: {metadata.get('totalPolicies', 0)}")
-                print(f"   Max Depth: {metadata.get('maxDepth', 0)}")
-                print(f"   Processing Time: {data.get('processingTimeMs', 0)}ms")
-                print(f"   Extracted At: {metadata.get('extractedAt', 'N/A')}")
-                
-                # Save to file
-                filename = f"ecp_structure_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-                with open(filename, 'w') as f:
-                    json.dump(data, f, indent=2)
-                print(f"\n💾 Full response saved to: {filename}")
-                
-            else:
-                print(f"❌ API returned success=false: {data.get('error', 'Unknown error')}")
-        
+            print("✅ SUCCESS!")
+            print(f"⏱️  Processing Time: {data.get('metadata', {}).get('processingTimeMs', 'N/A')}ms")
+            print(f"📄 Page ID: {data.get('pageId', 'N/A')}")
+            print(f"🔍 Search Text: {data.get('searchText', 'N/A')}")
+            
+            # Print structure summary
+            structure = data.get('structure', {})
+            nodes = structure.get('nodes', [])
+            edges = structure.get('edges', [])
+            
+            print(f"📈 Total Nodes: {len(nodes)}")
+            print(f"🔗 Total Edges: {len(edges)}")
+            
+            # Print node breakdown
+            node_types = {}
+            for node in nodes:
+                node_type = node.get('type', 'unknown')
+                node_types[node_type] = node_types.get(node_type, 0) + 1
+            
+            print("\n📋 Node Types:")
+            for node_type, count in node_types.items():
+                print(f"  • {node_type}: {count}")
+            
+            # Print first few nodes with details
+            print(f"\n🏗️  First {min(3, len(nodes))} Nodes:")
+            for i, node in enumerate(nodes[:3]):
+                print(f"  {i+1}. {node.get('type', 'unknown').upper()}: {node.get('title', 'No title')}")
+                if node.get('type') == 'policy' and node.get('content'):
+                    content_items = len(node.get('content', []))
+                    print(f"     📝 Policy has {content_items} content items")
+                print(f"     🆔 ID: {node.get('id')}, Level: {node.get('level')}")
+            
+            # Show policy content example
+            policy_nodes = [n for n in nodes if n.get('type') == 'policy']
+            if policy_nodes:
+                print(f"\n📋 First Policy Content Example:")
+                policy = policy_nodes[0]
+                print(f"   Title: {policy.get('title')}")
+                content = policy.get('content', [])
+                for i, item in enumerate(content[:3]):  # Show first 3 items
+                    print(f"   {i+1}. {item.get('content', 'No content')}")
+                if len(content) > 3:
+                    print(f"   ... and {len(content) - 3} more items")
+            
+            # Save full response to file
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            filename = f"graph_structure_{timestamp}.json"
+            with open(filename, 'w', encoding='utf-8') as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            print(f"\n💾 Full response saved to: {filename}")
+            
         else:
-            print(f"❌ HTTP Error {response.status_code}")
+            print("❌ FAILED!")
+            print(f"Error: {response.status_code}")
             try:
                 error_data = response.json()
-                print(f"Error: {error_data.get('error', 'Unknown error')}")
+                print(f"Details: {error_data.get('error', 'Unknown error')}")
             except:
-                print(f"Error: {response.text}")
+                print(f"Response text: {response.text}")
     
     except requests.exceptions.Timeout:
         print("⏰ Request timed out (60 seconds)")
+    except requests.exceptions.ConnectionError:
+        print("🔌 Connection error - check your URL and internet connection")
     except requests.exceptions.RequestException as e:
         print(f"❌ Request error: {e}")
     except Exception as e:
         print(f"❌ Unexpected error: {e}")
 
+def test_health_check():
+    """
+    Quick health check to verify the API is running
+    """
+    BASE_URL = "https://backendfornotiongraph.vercel.app"  # Replace with your actual URL
+    
+    try:
+        print("🏥 Testing health check...")
+        response = requests.get(f"{BASE_URL}/health", timeout=10)
+        
+        if response.status_code == 200:
+            data = response.json()
+            print("✅ API is healthy!")
+            print(f"   Status: {data.get('status')}")
+            print(f"   Firebase: {data.get('firebase')}")
+            print(f"   Notion: {data.get('notion')}")
+        else:
+            print(f"❌ Health check failed: {response.status_code}")
+            
+    except Exception as e:
+        print(f"❌ Health check error: {e}")
+
 if __name__ == "__main__":
-    test_ecp_structure_api()
+    print("🧪 Graph Structure API Test Script")
+    print("=" * 50)
+    
+    # Update these values before running:
+    print("📝 IMPORTANT: Update these values in the script:")
+    print("   • BASE_URL: Your actual Vercel deployment URL")
+    print("   • pageId: Your actual Notion page ID")
+    print("=" * 50)
+    
+    # Run health check first
+    test_health_check()
+    print()
+    
+    # Run main test
+    test_graph_structure_api()
+    
+    print("\n🎉 Test completed!")

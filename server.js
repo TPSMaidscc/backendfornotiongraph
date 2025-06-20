@@ -1289,7 +1289,7 @@ function extractDetailedGraphStructure(toggleStructureJson) {
     if (!block.children || block.children.length === 0) {
       return [];
     }
-
+  
     const policyItems = [];
     
     function extractFromChildren(children, level = 0) {
@@ -1299,7 +1299,8 @@ function extractDetailedGraphStructure(toggleStructureJson) {
             policyItems.push({
               type: child.type,
               content: child.content.trim(),
-              level: level
+              level: level,
+              notionBlockId: child.id  // ✨ ADD NOTION BLOCK ID TO CONTENT ITEMS
             });
           }
         }
@@ -1350,7 +1351,7 @@ function extractDetailedGraphStructure(toggleStructureJson) {
     let shouldCreateNode = false;
     let nodeData = null;
     
-    console.log(`🔍 Processing block at level ${level}: "${content.substring(0, 100)}..."`);
+    console.log(`🔍 Processing block at level ${level}: "${content.substring(0, 100)}..." (Block ID: ${block.id})`);
     
     // Business ECP
     if (level === 0 && content.includes('Business ECP:')) {
@@ -1373,9 +1374,10 @@ function extractDetailedGraphStructure(toggleStructureJson) {
         title: cleanedContent,
         originalContent: content,
         level: level,
-        parentId: parentId
+        parentId: parentId,
+        notionBlockId: block.id  // ✨ ADD NOTION BLOCK ID
       };
-      console.log(`✅ Created Business ECP node: ${nodeData.title}`);
+      console.log(`✅ Created Business ECP node: ${nodeData.title} (Block ID: ${block.id})`);
     }
     // Condition
     else if (isCondition(content)) {
@@ -1389,13 +1391,14 @@ function extractDetailedGraphStructure(toggleStructureJson) {
         title: cleanedContent,
         originalContent: content,
         level: level,
-        parentId: parentId
+        parentId: parentId,
+        notionBlockId: block.id  // ✨ ADD NOTION BLOCK ID
       };
-      console.log(`✅ Created Condition node: ${nodeData.title}`);
+      console.log(`✅ Created Condition node: ${nodeData.title} (Block ID: ${block.id})`);
     }
     // Policy
     else if (isPolicy(content)) {
-      console.log(`📋 Found policy block: "${content.substring(0, 100)}..."`);
+      console.log(`📋 Found policy block: "${content.substring(0, 100)}..." (Block ID: ${block.id})`);
       
       shouldCreateNode = true;
       const policyTitle = extractPolicyTitle(content, block);
@@ -1409,9 +1412,10 @@ function extractDetailedGraphStructure(toggleStructureJson) {
         originalContent: content,
         content: policyContent,
         level: level,
-        parentId: parentId
+        parentId: parentId,
+        notionBlockId: block.id  // ✨ ADD NOTION BLOCK ID
       };
-      console.log(`✅ Created Policy node: ${nodeData.title} with ${policyContent.length} content items`);
+      console.log(`✅ Created Policy node: ${nodeData.title} with ${policyContent.length} content items (Block ID: ${block.id})`);
     }
     
     let currentNodeId = null;
@@ -1439,7 +1443,6 @@ function extractDetailedGraphStructure(toggleStructureJson) {
     
     return currentNodeId;
   }
-  
   console.log(`🚀 Starting detailed structure extraction...`);
   
   // Start processing from the root toggle block
