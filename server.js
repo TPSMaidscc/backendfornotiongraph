@@ -584,7 +584,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
       + (text.length > 50 ? '...' : '');
   }
 
-  // NEW: Calculate subtree width recursively - FIXED: moved inside the function scope
+  // NEW: Calculate subtree width recursively
   function calculateSubtreeWidth(block) {
     if (!block.children || block.children.length === 0) {
       return 1; // Leaf nodes have width of 1
@@ -616,7 +616,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
     return Math.max(1, totalWidth);
   }
 
-  // NEW: Layout nodes with proper subtree positioning - FIXED: moved inside the function scope
+  // NEW: Layout nodes with proper subtree positioning
   function layoutNodesWithSubtreePositioning(block, parentId = null, level = 0, subtreeStartX = 0, subtreeWidth = 1) {
     // Skip empty blocks
     if (!block.content || 
@@ -795,6 +795,11 @@ function transformToggleToReactFlow(toggleStructureJson) {
           edgeStyle.strokeWidth = 2;
           edgeStyle.animated = false;
           edgeStyle.strokeDasharray = '8,4';
+        if (nodeData.nodeType === 'policy') {
+          edgeStyle.stroke = '#4fd1c7';
+          edgeStyle.strokeWidth = 2;
+          edgeStyle.animated = false;
+          edgeStyle.strokeDasharray = '8,4';
         } else if (nodeData.nodeType === 'condition') {
           edgeStyle.stroke = '#a5b4fc';
           edgeStyle.strokeWidth = 2;
@@ -874,39 +879,6 @@ function transformToggleToReactFlow(toggleStructureJson) {
     return currentNodeId;
   }
   
-  // Handle case where we didn't create a node but still need to process children
-  function processChildrenWithoutNode(block, parentId, level, subtreeStartX, subtreeWidth) {
-    if (block.children && Array.isArray(block.children)) {
-      const validChildren = block.children.filter(child => {
-        if (!child.content) return false;
-        const content = child.content.trim();
-        return content !== '' && content !== '—' && content !== '[divider]' &&
-               child.type !== 'divider' && child.type !== 'unsupported' &&
-               (isCondition(content) || isPolicy(content) || 
-                (child.depth === 0 && content.includes('Business ECP:')));
-      });
-
-      if (validChildren.length > 0) {
-        let currentChildX = subtreeStartX;
-        for (const child of validChildren) {
-          const childWidth = calculateSubtreeWidth(child);
-          layoutNodesWithSubtreePositioning(child, parentId, level, currentChildX, childWidth);
-          currentChildX += childWidth * HORIZONTAL_SPACING;
-        }
-      }
-    }
-  }
-  
-  // If we didn't create a node but have children, still process them
-  if (!shouldCreateNode && block.children && Array.isArray(block.children)) {
-    processChildrenWithoutNode(block, parentId, level, subtreeStartX, subtreeWidth);
-  }
-  
-  return currentNodeId;
-    
-    return currentNodeId;
-  }
-  
   console.log(`🚀 Starting transformation of toggle structure with subtree-aware layout...`);
   
   // Calculate the total width of the root tree
@@ -960,6 +932,8 @@ function transformToggleToReactFlow(toggleStructureJson) {
       }
     }
   };
+}
+}
 
 // ===== API ROUTES =====
 
