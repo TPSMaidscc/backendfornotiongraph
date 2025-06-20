@@ -1138,7 +1138,6 @@ app.post('/api/quick-test', async (req, res) => {
 
 // Add this new endpoint to your existing Express app
 
-// ===== NEW API ENDPOINT: GET GRAPH STRUCTURE AS JSON =====
 app.post('/api/graph-structure', async (req, res) => {
   const startTime = Date.now();
   
@@ -1147,7 +1146,6 @@ app.post('/api/graph-structure', async (req, res) => {
 
     if (!pageId || !text) {
       return res.status(400).json({
-        success: false,
         error: 'Missing required parameters: pageId and text'
       });
     }
@@ -1158,22 +1156,12 @@ app.post('/api/graph-structure', async (req, res) => {
     const toggleStructure = await fetchToggleBlockStructure({ pageId, text });
     console.log(`✅ Toggle structure extracted in ${Date.now() - startTime}ms`);
     
-    // Transform to graph structure with detailed content
-    const graphStructure = extractDetailedGraphStructure(toggleStructure.result);
-    console.log(`✅ Graph structure created: ${graphStructure.nodes.length} nodes`);
+    // Transform to simplified graph structure
+    const simplifiedStructure = extractSimplifiedGraphStructure(toggleStructure.result);
+    console.log(`✅ Simplified structure created: ${simplifiedStructure.length} nodes`);
 
-    res.json({
-      success: true,
-      pageId,
-      searchText: text,
-      structure: graphStructure,
-      metadata: {
-        totalNodes: graphStructure.nodes.length,
-        totalEdges: graphStructure.edges.length,
-        processingTimeMs: Date.now() - startTime,
-        extractedAt: new Date().toISOString()
-      }
-    });
+    // Return only the simplified nodes array
+    res.json(simplifiedStructure);
 
   } catch (error) {
     console.error('❌ Error extracting graph structure:', error);
@@ -1186,13 +1174,149 @@ app.post('/api/graph-structure', async (req, res) => {
     }
 
     res.status(500).json({
-      success: false,
-      error: errorMessage,
-      processingTimeMs: Date.now() - startTime
+      error: errorMessage
     });
   }
 });
 
+// NEW FUNCTION: Extract simplified graph structure
+function extractSimplifiedGraphStructure(toggleStructureJson) {
+  const toggleStructure = JSON.parse(toggleStructureJson);
+  const nodes = [];
+  let nodeIdCounter = 1;
+
+  // Helper functions (reusing existing logic)
+  function isCondition(content) {
+    return /[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(content);
+  }
+  
+  function isPolicy(content) {
+    return /←\s*Policy\s*:/.test(content);
+  }
+
+  function extractPolicyContentAsString(block) {
+    if (!block.children || block.children.length === 0) {
+      return "";
+    }
+
+    const contentItems = [];
+    
+    function extractFromChildren(children) {
+      for (const child of children) {
+        if (child.type === 'bulleted_list_item' || child.type === 'numbered_list_item') {
+          if (child.content && child.content.trim()) {
+            contentItems.push(child.content.trim());
+          }
+        }
+        
+        // Recursively process nested children
+        if (child.children && child.children.length > 0) {
+          extractFromChildren(child.children);
+        }
+      }
+    }
+    
+    extractFromChildren(block.children);
+    
+    // Join all content items with newlines or spaces
+    return contentItems.join(' ');
+  }
+  
+  function createSimplifiedNode(block, parentId = null, level = 0) {
+    if (!block.content || 
+        block.content.trim() === '' || 
+        block.content === '—' || 
+        block.content === '[divider]' ||
+        block.type === 'divider' ||
+        block.type === 'unsupported') {
+      
+      if (block.children && Array.isArray(block.children)) {
+        for (const child of block.children) {
+          createSimplifiedNode(child, parentId, level);
+        }
+      }
+      return null;
+    }
+    
+    const content = block.content.trim();
+    let shouldCreateNode = false;
+    let nodeData = null;
+    
+    console.log(`🔍 Processing block at level ${level}: "${content.substring(0, 100)}..." (Block ID: ${block.id})`);
+    
+    // Business ECP
+    if (level === 0 && content.includes('Business ECP:')) {
+      shouldCreateNode = true;
+      
+      nodeData = {
+        id: String(nodeIdCounter++),
+        type: 'businessECP',
+        title: content, // Use original content as title
+        level: level,
+        parentId: parentId,
+        notionBlockId: block.id
+      };
+      console.log(`✅ Created Business ECP node (Block ID: ${block.id})`);
+    }
+    // Condition
+    else if (isCondition(content)) {
+      shouldCreateNode = true;
+      
+      nodeData = {
+        id: String(nodeIdCounter++),
+        type: 'condition',
+        title: content, // Use original content as title
+        level: level,
+        parentId: parentId,
+        notionBlockId: block.id
+      };
+      console.log(`✅ Created Condition node (Block ID: ${block.id})`);
+    }
+    // Policy
+    else if (isPolicy(content)) {
+      console.log(`📋 Found policy block: "${content.substring(0, 100)}..." (Block ID: ${block.id})`);
+      
+      shouldCreateNode = true;
+      const policyContentString = extractPolicyContentAsString(block);
+      
+      nodeData = {
+        id: String(nodeIdCounter++),
+        type: 'policy',
+        title: content, // Use original content as title
+        content: policyContentString, // Single string instead of array
+        level: level,
+        parentId: parentId,
+        notionBlockId: block.id
+      };
+      console.log(`✅ Created Policy node with content length: ${policyContentString.length} chars (Block ID: ${block.id})`);
+    }
+    
+    let currentNodeId = null;
+    
+    if (shouldCreateNode && nodeData) {
+      currentNodeId = nodeData.id;
+      nodes.push(nodeData);
+    }
+    
+    // Process children recursively
+    if (block.children && Array.isArray(block.children)) {
+      for (const child of block.children) {
+        createSimplifiedNode(child, currentNodeId || parentId, level + (shouldCreateNode ? 1 : 0));
+      }
+    }
+    
+    return currentNodeId;
+  }
+  
+  console.log(`🚀 Starting simplified structure extraction...`);
+  
+  // Start processing from the root toggle block
+  createSimplifiedNode(toggleStructure.toggleBlock);
+  
+  console.log(`📊 Created ${nodes.length} simplified nodes`);
+  
+  return nodes;
+}
 // ===== NEW FUNCTION: EXTRACT DETAILED GRAPH STRUCTURE =====
 function extractDetailedGraphStructure(toggleStructureJson) {
   const toggleStructure = JSON.parse(toggleStructureJson);
