@@ -1,0 +1,60 @@
+{
+  "success": true,
+  "pageId": "2117432eb84380768024ee386b9bc3a5",
+  "processingTimeMs": 5053,
+  "structure": {
+    "businessECP": {
+      "id": "2117432e-b843-8142-94b3-f5d4bce0d4b4",
+      "title": "Business ECP",
+      "originalContent": "Business ECP:  (\u2192 TyptestECP Name Here \u2190)",
+      "depth": 0,
+      "type": "businessECP"
+    },
+    "conditions": [
+      {
+        "id": "2117432e-b843-8148-acf9-f37156ab2ed0",
+        "title": "x=5",
+        "originalContent": "\u2776 Condition (\u2192 x=5 \u2190)",
+        "depth": 1,
+        "type": "condition",
+        "childPolicies": [
+          {
+            "id": "2117432e-b843-8121-9e44-fa584608604b",
+            "title": "This is a test",
+            "content": [
+              "This is a test"
+            ]
+          }
+        ],
+        "childConditions": []
+      },
+      {
+        "id": "2117432e-b843-80d4-a567-c2f318931bf1",
+        "title": "y=2",
+        "originalContent": "\u2777 Condition (\u2192 y=2 \u2190)",
+        "depth": 2,
+        "type": "condition",
+        "childPolicies": [],
+        "childConditions": []
+      }
+    ],
+    "policies": [
+      {
+        "id": "2117432e-b843-8121-9e44-fa584608604b",
+        "title": "This is a test",
+        "originalContent": "\u2190 Policy: (\u2192 Type your Policy Name Here \u2190) - optional title",
+        "content": [
+          "This is a test"
+        ],
+        "depth": 2,
+        "type": "policy"
+      }
+    ],
+    "metadata": {
+      "totalConditions": 2,
+      "totalPolicies": 1,
+      "maxDepth": 4,
+      "extractedAt": "2025-06-20T18:43:54.159Z"
+    }
+  }
+}

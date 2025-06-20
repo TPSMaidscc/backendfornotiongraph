@@ -1191,7 +1191,7 @@ app.post('/api/ecp-structure', async (req, res) => {
   }
 });
 
-// Replace the existing transformToggleToECPStructure function in your server.js with this cleaned version
+// Replace the transformToggleToECPStructure function with this corrected version
 
 function transformToggleToECPStructure(toggleStructureJson) {
   const toggleStructure = JSON.parse(toggleStructureJson);
@@ -1219,7 +1219,6 @@ function transformToggleToECPStructure(toggleStructureJson) {
   }
   
   function isNoiseContent(content) {
-    // Filter out dividers, unsupported blocks, and empty content
     if (!content || typeof content !== 'string') return true;
     
     const trimmed = content.trim();
@@ -1228,19 +1227,17 @@ function transformToggleToECPStructure(toggleStructureJson) {
       trimmed === '—' ||
       trimmed === '[divider]' ||
       trimmed === '[unsupported]' ||
-      /^\[.*\]$/.test(trimmed) || // Any content in brackets like [unsupported]
+      /^\[.*\]$/.test(trimmed) ||
       trimmed.length < 2
     );
   }
   
   function extractConditionTitle(content) {
-    // Extract title from patterns like "❶ Condition (→ x=5 ←)" -> "x=5"
     const matchWithParens = content.match(/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition\s*\(→\s*(.+?)\s*←\)/);
     if (matchWithParens) {
       let title = matchWithParens[1].trim();
-      // Clean up template text
       if (title.includes('Type your Condition Here')) {
-        return null; // Don't process template conditions
+        return null; // Skip template conditions
       }
       return title;
     }
@@ -1258,12 +1255,10 @@ function transformToggleToECPStructure(toggleStructureJson) {
   }
   
   function extractPolicyTitle(content, block) {
-    // Extract title from patterns like "← Policy: (→ policy name ←)" -> "policy name"
     const matchWithParens = content.match(/←\s*Policy\s*:\s*\(→\s*(.+?)\s*←\)/);
     if (matchWithParens) {
       let title = matchWithParens[1].trim();
       
-      // If it's a template, try to get content from children
       if (title.includes('Type your Policy Name Here')) {
         const betterTitle = getFirstMeaningfulContent(block);
         if (betterTitle) {
@@ -1279,7 +1274,6 @@ function transformToggleToECPStructure(toggleStructureJson) {
     if (matchAfterPolicy) {
       let title = matchAfterPolicy[1].trim();
       
-      // Clean up the title
       title = title
         .replace(/\s*-\s*optional title.*$/i, '')
         .replace(/^\(→\s*/, '')
@@ -1291,19 +1285,18 @@ function transformToggleToECPStructure(toggleStructureJson) {
         if (betterTitle) {
           return betterTitle;
         }
-        return null; // Skip empty policies
+        return null;
       }
       
       return title;
     }
     
-    // Handle cases without anything after colon
     if (content.match(/←\s*Policy\s*:\s*$/)) {
       const childTitle = getFirstMeaningfulContent(block);
       if (childTitle) {
         return childTitle;
       }
-      return null; // Skip empty policies
+      return null;
     }
     
     return null;
@@ -1314,17 +1307,14 @@ function transformToggleToECPStructure(toggleStructureJson) {
       return null;
     }
     
-    // Look for the first meaningful content in children
     for (const child of block.children) {
       if (child.content && !isNoiseContent(child.content)) {
         const content = child.content.trim();
-        // Make sure it's not a condition or policy block
         if (!isCondition(content) && !isPolicy(content)) {
           return content;
         }
       }
       
-      // Recursively check children
       if (child.children) {
         const found = getFirstMeaningfulContent(child);
         if (found) return found;
@@ -1339,7 +1329,6 @@ function transformToggleToECPStructure(toggleStructureJson) {
     
     if (block.children && Array.isArray(block.children)) {
       for (const child of block.children) {
-        // Only include meaningful content that's not conditions or policies
         if (child.content && 
             !isNoiseContent(child.content) && 
             !isCondition(child.content) && 
@@ -1347,7 +1336,6 @@ function transformToggleToECPStructure(toggleStructureJson) {
           content.push(child.content.trim());
         }
         
-        // Recursively extract from nested children
         if (child.children) {
           const nestedContent = extractPolicyContent(child);
           content.push(...nestedContent);
@@ -1362,32 +1350,34 @@ function transformToggleToECPStructure(toggleStructureJson) {
     if (!text) return '';
     
     return text
-      .replace(/["\[\]]/g, '') // Remove quotes and brackets
-      .replace(/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]/g, '') // Remove number emojis
-      .replace(/^\s*←?\s*/, '') // Remove leading arrows and spaces
-      .replace(/^\s*→?\s*/, '') // Remove right arrows
-      .replace(/\s*←\s*$/, '') // Remove trailing arrows
-      .replace(/\s*→\s*$/, '') // Remove trailing right arrows
-      .replace(/\(\s*→\s*/, '(') // Clean up arrow patterns in parentheses
-      .replace(/\s*←\s*\)/, ')') // Clean up arrow patterns in parentheses
-      .replace(/â/g, '') // Remove the â character
-      .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+      .replace(/["\[\]]/g, '')
+      .replace(/[❶❷❃❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]/g, '')
+      .replace(/^\s*←?\s*/, '')
+      .replace(/^\s*→?\s*/, '')
+      .replace(/\s*←\s*$/, '')
+      .replace(/\s*→\s*$/, '')
+      .replace(/\(\s*→\s*/, '(')
+      .replace(/\s*←\s*\)/, ')')
+      .replace(/â/g, '')
+      .replace(/\s+/g, ' ')
       .trim();
   }
   
-  function processBlock(block, depth = 0, parentConditionId = null) {
+  function processBlock(block, depth = 0, parentCondition = null) {
     if (!block.content || isNoiseContent(block.content)) {
       // Process children even if current block is noise
       if (block.children && Array.isArray(block.children)) {
         for (const child of block.children) {
-          processBlock(child, depth, parentConditionId);
+          processBlock(child, depth, parentCondition);
         }
       }
-      return null;
+      return;
     }
     
     const content = block.content.trim();
     ecpStructure.metadata.maxDepth = Math.max(ecpStructure.metadata.maxDepth, depth);
+    
+    console.log(`🔍 Processing at depth ${depth}: "${content.substring(0, 50)}..."`);
     
     // Check if this is a Business ECP root node
     if (depth === 0 && content.includes('Business ECP:')) {
@@ -1397,7 +1387,6 @@ function transformToggleToECPStructure(toggleStructureJson) {
         .replace(/â/g, '')
         .trim();
       
-      // Clean up template text
       if (cleanedContent.includes('TyptestECP') || cleanedContent.includes('Type')) {
         cleanedContent = cleanedContent.replace(/TyptestECP\s*/, '').replace(/Type.*/, '').trim();
       }
@@ -1421,22 +1410,21 @@ function transformToggleToECPStructure(toggleStructureJson) {
         }
       }
       
-      return block.id;
+      return;
     }
     // Check if it's a condition
     else if (isCondition(content)) {
       const conditionTitle = extractConditionTitle(content);
       
-      // Skip template conditions
       if (!conditionTitle) {
-        console.log(`⚠️ Skipping template condition: ${content.substring(0, 50)}...`);
+        console.log(`⚠️ Skipping template condition at depth ${depth}`);
         // Still process children in case there are valid policies
         if (block.children && Array.isArray(block.children)) {
           for (const child of block.children) {
-            processBlock(child, depth + 1, parentConditionId);
+            processBlock(child, depth + 1, parentCondition);
           }
         }
-        return null;
+        return;
       }
       
       const cleanedTitle = cleanText(conditionTitle);
@@ -1448,50 +1436,49 @@ function transformToggleToECPStructure(toggleStructureJson) {
         depth: depth,
         type: 'condition',
         childPolicies: [],
-        childConditions: []
+        childConditions: [],
+        parentConditionId: parentCondition ? parentCondition.id : null
       };
       
       ecpStructure.conditions.push(condition);
       ecpStructure.metadata.totalConditions++;
       
-      console.log(`✅ Found Condition: ${cleanedTitle}`);
+      console.log(`✅ Found Condition: ${cleanedTitle} (parent: ${parentCondition ? parentCondition.title : 'none'})`);
       
-      // Process children with this condition as parent
+      // If this condition has a parent, add it to parent's childConditions
+      if (parentCondition) {
+        parentCondition.childConditions.push({
+          id: condition.id,
+          title: condition.title
+        });
+        console.log(`🔗 Added "${cleanedTitle}" as child of "${parentCondition.title}"`);
+      }
+      
+      // Process children with this condition as the new parent
       if (block.children && Array.isArray(block.children)) {
         for (const child of block.children) {
-          const childId = processBlock(child, depth + 1, block.id);
-          if (childId) {
-            // Check if the child was a condition
-            const childCondition = ecpStructure.conditions.find(c => c.id === childId);
-            if (childCondition) {
-              condition.childConditions.push({
-                id: childCondition.id,
-                title: childCondition.title
-              });
-            }
-          }
+          processBlock(child, depth + 1, condition);
         }
       }
       
-      return block.id;
+      return;
     }
     // Check if it's a policy
     else if (isPolicy(content)) {
       const policyTitle = extractPolicyTitle(content, block);
       
-      // Skip template policies with no content
       if (!policyTitle) {
-        console.log(`⚠️ Skipping template policy: ${content.substring(0, 50)}...`);
-        return null;
+        console.log(`⚠️ Skipping template policy at depth ${depth}`);
+        return;
       }
       
       const cleanedTitle = cleanText(policyTitle);
       const policyContent = extractPolicyContent(block);
       
-      // Skip policies with no meaningful content
+      // Skip policies with no meaningful content unless they have a real title
       if (policyContent.length === 0 && cleanedTitle.includes('Type your Policy')) {
         console.log(`⚠️ Skipping empty template policy: ${cleanedTitle}`);
-        return null;
+        return;
       }
       
       const policy = {
@@ -1500,46 +1487,44 @@ function transformToggleToECPStructure(toggleStructureJson) {
         originalContent: content,
         content: policyContent,
         depth: depth,
-        type: 'policy'
+        type: 'policy',
+        parentConditionId: parentCondition ? parentCondition.id : null
       };
       
       ecpStructure.policies.push(policy);
       ecpStructure.metadata.totalPolicies++;
       
-      console.log(`✅ Found Policy: ${cleanedTitle} (${policyContent.length} content items)`);
+      console.log(`✅ Found Policy: ${cleanedTitle} (parent: ${parentCondition ? parentCondition.title : 'none'}) - ${policyContent.length} content items`);
       
       // Associate this policy with the parent condition
-      if (parentConditionId) {
-        const parentCondition = ecpStructure.conditions.find(c => c.id === parentConditionId);
-        if (parentCondition) {
-          parentCondition.childPolicies.push({
-            id: policy.id,
-            title: policy.title,
-            content: policy.content
-          });
-          console.log(`🔗 Associated policy "${cleanedTitle}" with condition "${parentCondition.title}"`);
-        }
+      if (parentCondition) {
+        parentCondition.childPolicies.push({
+          id: policy.id,
+          title: policy.title,
+          content: policy.content
+        });
+        console.log(`🔗 Added policy "${cleanedTitle}" to condition "${parentCondition.title}"`);
       }
       
-      return block.id;
+      return;
     }
     else {
-      // For other blocks, just process children
+      // For other blocks, just process children with the same parent
       if (block.children && Array.isArray(block.children)) {
         for (const child of block.children) {
-          processBlock(child, depth, parentConditionId);
+          processBlock(child, depth, parentCondition);
         }
       }
-      return null;
+      return;
     }
   }
   
-  console.log(`🚀 Starting cleaned ECP structure extraction...`);
+  console.log(`🚀 Starting hierarchy-aware ECP structure extraction...`);
   
   // Start processing from the root toggle block
   processBlock(toggleStructure.toggleBlock);
   
-  // Remove any conditions or policies that are empty or template-only
+  // Remove any empty template conditions or policies
   ecpStructure.conditions = ecpStructure.conditions.filter(condition => 
     condition.title && 
     !condition.title.includes('Type your Condition') &&
@@ -1549,18 +1534,23 @@ function transformToggleToECPStructure(toggleStructureJson) {
   ecpStructure.policies = ecpStructure.policies.filter(policy => 
     policy.title && 
     !policy.title.includes('Type your Policy') &&
-    (policy.content.length > 0 || policy.title.trim().length > 0)
+    (policy.content.length > 0 || !policy.title.includes('Template'))
   );
   
   // Update metadata
   ecpStructure.metadata.totalConditions = ecpStructure.conditions.length;
   ecpStructure.metadata.totalPolicies = ecpStructure.policies.length;
   
-  console.log(`📊 Cleaned ECP Structure Summary:`);
+  console.log(`📊 Hierarchy-Aware ECP Structure Summary:`);
   console.log(`   - Business ECP: ${ecpStructure.businessECP ? ecpStructure.businessECP.title : 'Not found'}`);
   console.log(`   - Valid Conditions: ${ecpStructure.metadata.totalConditions}`);
   console.log(`   - Valid Policies: ${ecpStructure.metadata.totalPolicies}`);
-  console.log(`   - Max Depth: ${ecpStructure.metadata.maxDepth}`);
+  
+  // Log the hierarchy
+  ecpStructure.conditions.forEach(condition => {
+    const indent = '  '.repeat(condition.depth);
+    console.log(`${indent}📍 ${condition.title} (${condition.childConditions.length} child conditions, ${condition.childPolicies.length} policies)`);
+  });
   
   return ecpStructure;
 }
