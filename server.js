@@ -449,43 +449,38 @@ async function simplifyBlockForVercel(block, headers, depth) {
   return simplified;
 }
 
-// Proper transformation function to extract real Notion content
+// Enhanced transformation function with improved layout algorithm
 function transformToggleToReactFlow(toggleStructureJson) {
   const toggleStructure = JSON.parse(toggleStructureJson);
   const nodes = [];
   const edges = [];
   let nodeIdCounter = 1;
 
-  // Layout configuration with proper spacing
-  const HORIZONTAL_SPACING = 350;
-  const VERTICAL_SPACING = 220;
+  // Enhanced layout configuration
+  const HORIZONTAL_SPACING = 450; // Increased from 350
+  const VERTICAL_SPACING = 180;   // Spacing between levels
+  const LEAF_VERTICAL_SPACING = 120; // Closer spacing for leaf nodes
+  const SIBLING_BUFFER = 100;     // Extra buffer between siblings with children
   
-  // Track positions for layout
-  const levelPositions = new Map();
+  // Track layout information
+  const nodeMap = new Map();
+  const levelInfo = new Map();
   
-  // Helper functions for content analysis
+  // Helper functions for content analysis (unchanged)
   function isCondition(content) {
-    // Check for condition patterns like ❶, ❷, ❸, etc. followed by "Condition"
     return /[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(content);
   }
   
   function isPolicy(content) {
-    // Check for policy patterns like "← Policy:" or "← Policy: (→ something ←)"
     return /←\s*Policy\s*:/.test(content);
   }
   
   function extractConditionTitle(content) {
-    // Extract title from patterns like:
-    // "❶ Condition (→ x=5 ←)" -> "x=5"
-    // "❷ Condition (→ y=2 ←)" -> "y=2"
-    
-    // First try to match with parentheses
     const matchWithParens = content.match(/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition\s*\(→\s*(.+?)\s*←\)/);
     if (matchWithParens) {
       return matchWithParens[1].trim();
     }
     
-    // Then try to match everything after "❶ Condition "
     const matchAfterCondition = content.match(/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition\s+(.+)/);
     if (matchAfterCondition) {
       return matchAfterCondition[1].trim();
@@ -495,37 +490,30 @@ function transformToggleToReactFlow(toggleStructureJson) {
   }
   
   function extractPolicyTitle(content, block) {
-    // Extract title from patterns like:
-    // "← Policy: (→ policy name ←)" -> "policy name"
-    
     console.log(`🔍 Extracting policy title from: "${content}"`);
     
-    // First try to match with parentheses
     const matchWithParens = content.match(/←\s*Policy\s*:\s*\(→\s*(.+?)\s*←\)/);
     if (matchWithParens) {
       const title = matchWithParens[1].trim();
       console.log(`✅ Found policy title in parentheses: "${title}"`);
       
-      // Even if it's a placeholder, we'll show it and try to get better content from children
       if (title.includes('Type your Policy Name Here')) {
         const betterTitle = getFirstFiveWordsFromFirstListItem(block);
         if (betterTitle && betterTitle !== 'Policy') {
           console.log(`✅ Found better policy title from children: "${betterTitle}"`);
           return betterTitle;
         }
-        return 'Policy (Template)'; // Show even template policies
+        return 'Policy (Template)';
       }
       
       return title;
     }
     
-    // Then try to match everything after "← Policy: "
     const matchAfterPolicy = content.match(/←\s*Policy\s*:\s*(.+)/);
     if (matchAfterPolicy) {
       const title = matchAfterPolicy[1].trim();
       console.log(`✅ Found policy title after colon: "${title}"`);
       
-      // Clean up common patterns
       const cleanedTitle = title
         .replace(/\s*-\s*optional title.*$/i, '')
         .replace(/^\(→\s*/, '')
@@ -538,13 +526,12 @@ function transformToggleToReactFlow(toggleStructureJson) {
           console.log(`✅ Found better policy title from children: "${betterTitle}"`);
           return betterTitle;
         }
-        return 'Policy (Empty)'; // Show even empty policies
+        return 'Policy (Empty)';
       }
       
       return cleanedTitle;
     }
     
-    // Handle cases without anything after colon like "← Policy:" or "← Policy: "
     if (content.match(/←\s*Policy\s*:\s*$/)) {
       console.log(`🔍 Empty policy found, checking children...`);
       const childTitle = getFirstFiveWordsFromFirstListItem(block);
@@ -552,7 +539,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
         console.log(`✅ Found policy title from children: "${childTitle}"`);
         return childTitle;
       }
-      return 'Policy (No Title)'; // Show even untitled policies
+      return 'Policy (No Title)';
     }
     
     console.log(`⚠️ Could not extract policy title from: "${content}"`);
@@ -567,7 +554,6 @@ function transformToggleToReactFlow(toggleStructureJson) {
     
     console.log(`🔍 Checking ${block.children.length} children for policy content...`);
     
-    // Find the first list item (bulleted_list_item or numbered_list_item)
     for (const child of block.children) {
       if (child.type === 'bulleted_list_item' || child.type === 'numbered_list_item') {
         const listContent = child.content;
@@ -586,311 +572,374 @@ function transformToggleToReactFlow(toggleStructureJson) {
     return null;
   }
   
-  function isPolicyEmpty(block) {
-    // We'll be more lenient - show policies even if they seem "empty"
-    // Only skip if there's absolutely no content structure
-    
-    if (!block.children || block.children.length === 0) {
-      console.log(`📋 Policy has no children - will still show as placeholder`);
-      return false; // Don't skip - show as placeholder
-    }
-    
-    // Check if all list children are completely empty
-    const listItems = block.children.filter(child => 
-      child.type === 'bulleted_list_item' || child.type === 'numbered_list_item'
-    );
-    
-    if (listItems.length === 0) {
-      console.log(`📋 Policy has children but no list items - will still show`);
-      return false; // Don't skip - might have other content
-    }
-    
-    // Only consider it truly empty if ALL list items are completely empty
-    const allEmpty = listItems.every(item => {
-      const content = item.content;
-      return !content || !content.trim();
-    });
-    
-    if (allEmpty) {
-      console.log(`📋 All policy list items are empty - will still show as template`);
-      return false; // Even completely empty policies should be shown
-    }
-    
-    console.log(`📋 Policy has some content in list items`);
-    return false; // Never skip policies
-  }
-  
   function cleanText(text) {
     return text
-      .replace(/["\[\]]/g, '') // Remove quotes and brackets
-      .replace(/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]/g, '') // Remove number emojis
-      .replace(/^\s*←?\s*/, '') // Remove leading arrows and spaces
-      .replace(/^\s*→?\s*/, '') // Remove right arrows
-      .replace(/\s*←\s*$/, '') // Remove trailing arrows
-      .replace(/\s*→\s*$/, '') // Remove trailing right arrows
-      .replace(/\(\s*→\s*/, '(') // Clean up arrow patterns in parentheses
-      .replace(/\s*←\s*\)/, ')') // Clean up arrow patterns in parentheses
-      .replace(/â/g, '') // Remove the â character
-      .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+      .replace(/["\[\]]/g, '')
+      .replace(/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]/g, '')
+      .replace(/^\s*←?\s*/, '')
+      .replace(/^\s*→?\s*/, '')
+      .replace(/\s*←\s*$/, '')
+      .replace(/\s*→\s*$/, '')
+      .replace(/\(\s*→\s*/, '(')
+      .replace(/\s*←\s*\)/, ')')
+      .replace(/â/g, '')
+      .replace(/\s+/g, ' ')
       .trim()
-      .substring(0, 50) // Limit length
+      .substring(0, 50)
       + (text.length > 50 ? '...' : '');
   }
-  
-  function createNode(block, parentId = null, level = 0) {
-    // Skip empty blocks, dividers, quotes with just "—", and unsupported blocks
-    if (!block.content || 
-        block.content.trim() === '' || 
-        block.content === '—' || 
-        block.content === '[divider]' ||
-        block.type === 'divider' ||
-        block.type === 'unsupported') {
-      
-      // Still process children
-      if (block.children && Array.isArray(block.children)) {
-        for (const child of block.children) {
-          createNode(child, parentId, level);
-        }
-      }
-      return null;
-    }
-    
-    const content = block.content.trim();
-    let shouldCreateNode = false;
-    let nodeData = null;
-    let nodeStyle = null;
-    
-    console.log(`🔍 Processing block at level ${level}: "${content.substring(0, 100)}..."`);
-    
-    // Check if this is a Business ECP root node
-    if (level === 0 && content.includes('Business ECP:')) {
-      shouldCreateNode = true;
-      // Extract the ECP name from patterns like "Business ECP: (→ TyptestECP Name Here ←)"
-      let cleanedContent = content
-        .replace(/Business ECP:\s*\(?\s*→?\s*/, '')
-        .replace(/\s*←?\s*\)?\s*.*$/, '')
-        .replace(/â/g, '')
-        .trim();
-      
-      // If still contains placeholder text, clean it up
-      if (cleanedContent.includes('TyptestECP') || cleanedContent.includes('Type')) {
-        cleanedContent = cleanedContent.replace(/TyptestECP\s*/, '').replace(/Type.*/, '').trim();
-      }
-      
-      if (!cleanedContent) cleanedContent = 'ECP Name';
-      
-      nodeData = {
-        label: `🏢 Business ECP: ${cleanedContent}`,
-        originalContent: content,
-        cleanedContent: cleanedContent,
-        blockType: block.type,
-        nodeType: 'businessECP',
-        depth: level
-      };
-      nodeStyle = {
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        border: 'none',
-        borderRadius: '12px',
-        fontSize: '15px',
-        fontWeight: '700',
-        padding: '20px 24px',
-        minWidth: '240px',
-        maxWidth: '320px',
-        boxShadow: '0 8px 25px rgba(102, 126, 234, 0.4)',
-        textAlign: 'center',
-        color: 'white'
-      };
-      console.log(`✅ Created Business ECP node: ${nodeData.label}`);
-    }
-    // Check if it's a condition
-    else if (isCondition(content)) {
-      shouldCreateNode = true;
-      const conditionTitle = extractConditionTitle(content);
-      const cleanedContent = cleanText(conditionTitle);
-      
-      nodeData = {
-        label: `❓ ${cleanedContent}`,
-        originalContent: content,
-        cleanedContent: cleanedContent,
-        blockType: block.type,
-        nodeType: 'condition',
-        depth: level
-      };
-      nodeStyle = {
-        background: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
-        border: 'none',
-        borderRadius: '12px',
-        fontSize: '14px',
-        fontWeight: '600',
-        padding: '18px 22px',
-        minWidth: '200px',
-        maxWidth: '300px',
-        boxShadow: '0 6px 20px rgba(246, 173, 85, 0.3)',
-        textAlign: 'center',
-        color: '#8b4513'
-      };
-      console.log(`✅ Created Condition node: ${nodeData.label}`);
-    }
-    // Check if it's a policy
-    else if (isPolicy(content)) {
-      console.log(`📋 Found policy block: "${content.substring(0, 100)}..."`);
-      
-      const policyTitle = extractPolicyTitle(content, block);
-      console.log(`📋 Extracted policy title: "${policyTitle}"`);
-      
-      // Always create policy nodes - don't skip any
-      shouldCreateNode = true;
-      const cleanedContent = cleanText(policyTitle);
-      
-      nodeData = {
-        label: `📋 ${cleanedContent}`,
-        originalContent: content,
-        cleanedContent: cleanedContent,
-        blockType: block.type,
-        nodeType: 'policy',
-        depth: level
-      };
-      nodeStyle = {
-        background: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
-        border: 'none',
-        borderRadius: '12px',
-        fontSize: '14px',
-        fontWeight: '600',
-        padding: '18px 22px',
-        minWidth: '200px',
-        maxWidth: '300px',
-        boxShadow: '0 6px 20px rgba(79, 209, 199, 0.3)',
-        textAlign: 'center',
-        color: '#2d3748'
-      };
-      console.log(`✅ Created Policy node: ${nodeData.label}`);
-    }
-    else {
-      // Log blocks that don't match our patterns
-      console.log(`⚠️ Block doesn't match any pattern at level ${level}: "${content.substring(0, 50)}..." (type: ${block.type})`);
-    }
-    
-    let currentNodeId = null;
-    
-    if (shouldCreateNode && nodeData) {
-      const nodeId = String(nodeIdCounter++);
-      currentNodeId = nodeId;
-      
-      // Initialize level tracking
-      if (!levelPositions.has(level)) {
-        levelPositions.set(level, 0);
-      }
-      
-      // Calculate position for top-to-bottom layout
-      const y = level * VERTICAL_SPACING;  // Y increases downward
-      const currentPosAtLevel = levelPositions.get(level);
-      const x = currentPosAtLevel * HORIZONTAL_SPACING; // X for horizontal spacing of siblings
-      
-      // Update level position counter
-      levelPositions.set(level, currentPosAtLevel + 1);
-      
-      // Create the node
-      const node = {
-        id: nodeId,
-        position: { x, y },
-        data: nodeData,
-        style: nodeStyle,
-        type: 'default'
-      };
-      
-      nodes.push(node);
-      
-      // Create edge from parent if exists
-      if (parentId) {
-        const edgeStyle = {
-          stroke: '#f6ad55',
-          strokeWidth: 3,
-          animated: true
-        };
-        
-        if (nodeData.nodeType === 'policy') {
-          edgeStyle.stroke = '#4fd1c7';
-          edgeStyle.strokeWidth = 2;
-          edgeStyle.animated = false;
-          edgeStyle.strokeDasharray = '8,4';
-        } else if (nodeData.nodeType === 'condition') {
-          edgeStyle.stroke = '#a5b4fc';
-          edgeStyle.strokeWidth = 2;
-          edgeStyle.animated = false;
-        }
-        
-        edges.push({
-          id: `e${parentId}-${nodeId}`,
-          source: parentId,
-          target: nodeId,
-          type: 'smoothstep',
-          style: edgeStyle,
-          markerEnd: {
-            type: 'arrowclosed',
-            color: edgeStyle.stroke,
-            width: 20,
-            height: 20
-          }
-        });
-      }
-    }
-    
-    // Process children recursively
+
+  // Enhanced tree analysis functions
+  function analyzeTreeStructure(block, level = 0) {
+    const analysis = {
+      hasChildren: false,
+      childCount: 0,
+      allChildrenAreLeaves: true,
+      maxDepth: level,
+      nodeInfo: null
+    };
+
     if (block.children && Array.isArray(block.children)) {
-      for (const child of block.children) {
-        createNode(child, currentNodeId || parentId, level + (shouldCreateNode ? 1 : 0));
+      const validChildren = block.children.filter(child => 
+        child.content && 
+        child.content.trim() !== '' && 
+        child.content !== '—' && 
+        child.type !== 'divider'
+      );
+
+      analysis.hasChildren = validChildren.length > 0;
+      analysis.childCount = validChildren.length;
+
+      for (const child of validChildren) {
+        const childAnalysis = analyzeTreeStructure(child, level + 1);
+        analysis.maxDepth = Math.max(analysis.maxDepth, childAnalysis.maxDepth);
+        
+        if (childAnalysis.hasChildren) {
+          analysis.allChildrenAreLeaves = false;
+        }
       }
     }
-    
-    return currentNodeId;
+
+    return analysis;
   }
-  
-  console.log(`🚀 Starting transformation of toggle structure...`);
-  
-  // Start processing from the root toggle block
-  createNode(toggleStructure.toggleBlock);
-  
-  console.log(`📊 Created ${nodes.length} nodes and ${edges.length} edges`);
-  
-  // Center the layout horizontally if there are nodes
-  if (nodes.length > 0) {
-    // Calculate the center offset for each level
-    const levelWidths = new Map();
+
+  // Smart positioning algorithm
+  function calculateSmartPositions(rootBlock) {
+    const positionMap = new Map();
+    const levelCounters = new Map();
     
-    // Calculate actual width needed for each level
-    nodes.forEach(node => {
-      const level = node.data.depth;
-      if (!levelWidths.has(level)) {
-        levelWidths.set(level, []);
-      }
-      levelWidths.get(level).push(node.position.x);
-    });
-    
-    // Center each level
-    levelWidths.forEach((xPositions, level) => {
-      if (xPositions.length > 1) {
-        const minX = Math.min(...xPositions);
-        const maxX = Math.max(...xPositions);
-        const levelWidth = maxX - minX;
-        const centerOffset = -levelWidth / 2;
+    function processNode(block, parentId = null, level = 0, parentX = 0) {
+      // Skip invalid blocks
+      if (!block.content || 
+          block.content.trim() === '' || 
+          block.content === '—' || 
+          block.type === 'divider') {
         
-        // Apply centering to nodes at this level
-        nodes.forEach(node => {
-          if (node.data.depth === level) {
-            node.position.x += centerOffset;
+        if (block.children && Array.isArray(block.children)) {
+          for (const child of block.children) {
+            processNode(child, parentId, level, parentX);
           }
-        });
-      } else if (xPositions.length === 1) {
-        // Single node, center it at x=0
-        nodes.forEach(node => {
-          if (node.data.depth === level) {
-            node.position.x = 0;
-          }
-        });
+        }
+        return null;
       }
-    });
+
+      const content = block.content.trim();
+      let shouldCreateNode = false;
+      let nodeData = null;
+
+      // Determine if this should be a node (same logic as before)
+      if (level === 0 && content.includes('Business ECP:')) {
+        shouldCreateNode = true;
+        let cleanedContent = content
+          .replace(/Business ECP:\s*\(?\s*→?\s*/, '')
+          .replace(/\s*←?\s*\)?\s*.*$/, '')
+          .replace(/â/g, '')
+          .trim();
+        
+        if (cleanedContent.includes('TyptestECP') || cleanedContent.includes('Type')) {
+          cleanedContent = cleanedContent.replace(/TyptestECP\s*/, '').replace(/Type.*/, '').trim();
+        }
+        
+        if (!cleanedContent) cleanedContent = 'ECP Name';
+        
+        nodeData = {
+          label: `🏢 Business ECP: ${cleanedContent}`,
+          originalContent: content,
+          cleanedContent: cleanedContent,
+          blockType: block.type,
+          nodeType: 'businessECP',
+          depth: level
+        };
+      }
+      else if (isCondition(content)) {
+        shouldCreateNode = true;
+        const conditionTitle = extractConditionTitle(content);
+        const cleanedContent = cleanText(conditionTitle);
+        
+        nodeData = {
+          label: `❓ ${cleanedContent}`,
+          originalContent: content,
+          cleanedContent: cleanedContent,
+          blockType: block.type,
+          nodeType: 'condition',
+          depth: level
+        };
+      }
+      else if (isPolicy(content)) {
+        shouldCreateNode = true;
+        const policyTitle = extractPolicyTitle(content, block);
+        const cleanedContent = cleanText(policyTitle);
+        
+        nodeData = {
+          label: `📋 ${cleanedContent}`,
+          originalContent: content,
+          cleanedContent: cleanedContent,
+          blockType: block.type,
+          nodeType: 'policy',
+          depth: level
+        };
+      }
+
+      let currentNodeId = null;
+
+      if (shouldCreateNode && nodeData) {
+        currentNodeId = String(nodeIdCounter++);
+        
+        // Analyze this node's children
+        const treeAnalysis = analyzeTreeStructure(block, level);
+        
+        // Initialize level tracking
+        if (!levelCounters.has(level)) {
+          levelCounters.set(level, 0);
+        }
+
+        // Calculate position based on tree structure
+        let x, y;
+        
+        if (level === 0) {
+          // Root node at center
+          x = 0;
+          y = 0;
+        } else {
+          y = level * VERTICAL_SPACING;
+          
+          // Check if parent has all leaf children
+          const parentHasAllLeafChildren = parentId && 
+            positionMap.has(parentId) && 
+            positionMap.get(parentId).treeAnalysis?.allChildrenAreLeaves;
+
+          if (parentHasAllLeafChildren && !treeAnalysis.hasChildren) {
+            // Stack leaf nodes vertically under parent
+            const siblingIndex = levelCounters.get(level);
+            const stackOffset = (siblingIndex - (treeAnalysis.childCount - 1) / 2) * LEAF_VERTICAL_SPACING;
+            x = parentX;
+            y = y + stackOffset * 0.3; // Slight vertical offset for stacking
+            
+            console.log(`📚 Stacking leaf node "${nodeData.label}" under parent at x=${x}`);
+          } else {
+            // Regular horizontal spacing for nodes with children or mixed siblings
+            const siblingIndex = levelCounters.get(level);
+            const spacing = treeAnalysis.hasChildren ? 
+              HORIZONTAL_SPACING + SIBLING_BUFFER : 
+              HORIZONTAL_SPACING;
+            
+            x = parentX + (siblingIndex - 0.5) * spacing;
+            
+            console.log(`🌳 Positioning node "${nodeData.label}" at x=${x} (sibling ${siblingIndex})`);
+          }
+        }
+
+        levelCounters.set(level, levelCounters.get(level) + 1);
+
+        // Store position and analysis
+        positionMap.set(currentNodeId, {
+          x,
+          y,
+          nodeData,
+          parentId,
+          level,
+          treeAnalysis
+        });
+
+        console.log(`✅ Created node "${nodeData.label}" at (${x}, ${y})`);
+      }
+
+      // Process children
+      if (block.children && Array.isArray(block.children)) {
+        const validChildren = block.children.filter(child => 
+          child.content && 
+          child.content.trim() !== '' && 
+          child.content !== '—' && 
+          child.type !== 'divider'
+        );
+
+        // Reset level counter for children if this is a new node
+        if (currentNodeId && validChildren.length > 0) {
+          const childLevel = level + 1;
+          levelCounters.set(childLevel, 0);
+        }
+
+        const currentX = currentNodeId ? positionMap.get(currentNodeId)?.x || parentX : parentX;
+
+        for (const child of block.children) {
+          processNode(child, currentNodeId || parentId, level + (shouldCreateNode ? 1 : 0), currentX);
+        }
+      }
+
+      return currentNodeId;
+    }
+
+    processNode(rootBlock);
+    return positionMap;
   }
-  
+
+  // Generate positions and create nodes
+  console.log(`🚀 Starting enhanced transformation with smart positioning...`);
+  const positionMap = calculateSmartPositions(toggleStructure.toggleBlock);
+
+  // Create nodes and edges from position map
+  positionMap.forEach((posInfo, nodeId) => {
+    const { x, y, nodeData, parentId } = posInfo;
+
+    // Create node style based on type
+    let nodeStyle;
+    const depthScale = Math.max(0.8, 1 - (nodeData.depth * 0.05));
+    const basePadding = 18;
+    const scaledPadding = Math.max(12, basePadding * depthScale);
+
+    const baseStyle = {
+      border: 'none',
+      borderRadius: '12px',
+      fontWeight: '600',
+      textAlign: 'center',
+      position: 'relative',
+      cursor: 'default',
+      wordWrap: 'break-word',
+      whiteSpace: 'normal',
+      lineHeight: '1.4'
+    };
+
+    switch (nodeData.nodeType) {
+      case 'businessECP':
+        nodeStyle = {
+          ...baseStyle,
+          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
+          fontSize: `${16 * depthScale}px`,
+          fontWeight: '700',
+          padding: `${scaledPadding + 4}px ${scaledPadding + 8}px`,
+          minWidth: `${100 * depthScale}px`,
+          maxWidth: `${400 * depthScale}px`,
+          boxShadow: '0 10px 30px rgba(102, 126, 234, 0.4)',
+          color: 'white',
+          transform: `scale(${Math.max(0.9, depthScale + 0.1)})`
+        };
+        break;
+      case 'condition':
+        nodeStyle = {
+          ...baseStyle,
+          background: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
+          fontSize: `${14 * depthScale}px`,
+          padding: `${scaledPadding}px ${scaledPadding + 4}px`,
+          minWidth: `${60 * depthScale}px`,
+          maxWidth: `${320 * depthScale}px`,
+          boxShadow: '0 8px 25px rgba(246, 173, 85, 0.35)',
+          color: '#8b4513',
+          transform: `scale(${depthScale})`
+        };
+        break;
+      case 'policy':
+        nodeStyle = {
+          ...baseStyle,
+          background: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
+          fontSize: `${14 * depthScale}px`,
+          padding: `${scaledPadding}px ${scaledPadding + 4}px`,
+          minWidth: `${60 * depthScale}px`,
+          maxWidth: `${320 * depthScale}px`,
+          boxShadow: '0 8px 25px rgba(79, 209, 199, 0.35)',
+          color: '#2d3748',
+          transform: `scale(${depthScale})`
+        };
+        break;
+      default:
+        nodeStyle = {
+          ...baseStyle,
+          background: 'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)',
+          fontSize: `${13 * depthScale}px`,
+          padding: `${scaledPadding}px ${scaledPadding + 4}px`,
+          minWidth: `${200 * depthScale}px`,
+          maxWidth: `${300 * depthScale}px`,
+          boxShadow: '0 6px 20px rgba(165, 180, 252, 0.3)',
+          color: '#3730a3',
+          transform: `scale(${depthScale})`
+        };
+    }
+
+    // Create the node
+    const node = {
+      id: nodeId,
+      position: { x, y },
+      data: nodeData,
+      style: nodeStyle,
+      type: 'default'
+    };
+
+    nodes.push(node);
+
+    // Create edge from parent if exists
+    if (parentId) {
+      const edgeStyle = {
+        stroke: '#f6ad55',
+        strokeWidth: 3,
+        animated: true
+      };
+
+      if (nodeData.nodeType === 'policy') {
+        edgeStyle.stroke = '#4fd1c7';
+        edgeStyle.strokeWidth = 2;
+        edgeStyle.animated = false;
+        edgeStyle.strokeDasharray = '8,4';
+      } else if (nodeData.nodeType === 'condition') {
+        edgeStyle.stroke = '#a5b4fc';
+        edgeStyle.strokeWidth = 2;
+        edgeStyle.animated = false;
+      }
+
+      edges.push({
+        id: `e${parentId}-${nodeId}`,
+        source: parentId,
+        target: nodeId,
+        type: 'smoothstep',
+        style: edgeStyle,
+        markerEnd: {
+          type: 'arrowclosed',
+          color: edgeStyle.stroke,
+          width: 20,
+          height: 20
+        }
+      });
+    }
+  });
+
+  console.log(`📊 Created ${nodes.length} nodes and ${edges.length} edges with enhanced layout`);
+
+  // Center the entire graph
+  if (nodes.length > 0) {
+    const allX = nodes.map(n => n.position.x);
+    const allY = nodes.map(n => n.position.y);
+    const minX = Math.min(...allX);
+    const maxX = Math.max(...allX);
+    const minY = Math.min(...allY);
+    const centerOffsetX = -(minX + maxX) / 2;
+    const centerOffsetY = -minY;
+
+    nodes.forEach(node => {
+      node.position.x += centerOffsetX;
+      node.position.y += centerOffsetY;
+    });
+
+    console.log(`🎯 Centered graph with offset (${centerOffsetX}, ${centerOffsetY})`);
+  }
+
   // Count node types for metadata
   const nodeTypes = {
     businessECP: nodes.filter(n => n.data.nodeType === 'businessECP').length,
@@ -898,9 +947,9 @@ function transformToggleToReactFlow(toggleStructureJson) {
     policies: nodes.filter(n => n.data.nodeType === 'policy').length,
     other: nodes.filter(n => !['businessECP', 'condition', 'policy'].includes(n.data.nodeType)).length
   };
-  
-  console.log(`📈 Node breakdown: ${JSON.stringify(nodeTypes)}`);
-  
+
+  console.log(`📈 Enhanced layout - Node breakdown: ${JSON.stringify(nodeTypes)}`);
+
   return {
     nodes,
     edges,
@@ -910,18 +959,34 @@ function transformToggleToReactFlow(toggleStructureJson) {
       maxDepth: nodes.length > 0 ? Math.max(...nodes.map(n => n.data.depth)) : 0,
       sourceMetadata: toggleStructure.metadata,
       nodeTypes: nodeTypes,
-      layout: 'topToBottom',
+      layout: 'smartPositioning',
+      layoutFeatures: {
+        enhancedSpacing: true,
+        leafNodeStacking: true,
+        arrowIntersectionPrevention: true,
+        horizontalSpacing: HORIZONTAL_SPACING,
+        verticalSpacing: VERTICAL_SPACING,
+        leafVerticalSpacing: LEAF_VERTICAL_SPACING
+      },
       processingRules: {
         ignoredEmptyPolicies: true,
         extractedConditionNumbers: true,
         cleanedContent: true,
-        centeredLayout: true,
-        improvedSpacing: true
+        smartPositioning: true,
+        improvedSpacing: true,
+        leafStacking: true
       }
     }
   };
 }
 
+// Also update the ReactFlow fitView options for better visualization
+const updatedFitViewOptions = {
+  padding: 0.2, // Increased padding for the new wider layout
+  minZoom: 0.05, // Allow more zoom out for complex structures
+  maxZoom: 1.5,
+  includeHiddenNodes: false
+};
 // ===== API ROUTES =====
 
 // Root route for Vercel
