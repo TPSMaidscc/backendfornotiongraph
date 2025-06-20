@@ -794,7 +794,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
           edgeStyle.stroke = '#4fd1c7';
           edgeStyle.strokeWidth = 2;
           edgeStyle.animated = false;
-          edgeStyle.strokeDasharray = '8,4';
+          edgeStyle.strokeDasharray = '8,4';}
         if (nodeData.nodeType === 'policy') {
           edgeStyle.stroke = '#4fd1c7';
           edgeStyle.strokeWidth = 2;
@@ -932,7 +932,6 @@ function transformToggleToReactFlow(toggleStructureJson) {
       }
     }
   };
-}
 }
 
 // ===== API ROUTES =====
