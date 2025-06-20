@@ -1,7 +1,7 @@
 {
   "success": true,
   "pageId": "2117432eb84380768024ee386b9bc3a5",
-  "processingTimeMs": 5053,
+  "processingTimeMs": 7432,
   "structure": {
     "businessECP": {
       "id": "2117432e-b843-8142-94b3-f5d4bce0d4b4",
@@ -26,7 +26,13 @@
             ]
           }
         ],
-        "childConditions": []
+        "childConditions": [
+          {
+            "id": "2117432e-b843-80d4-a567-c2f318931bf1",
+            "title": "y=2"
+          }
+        ],
+        "parentConditionId": null
       },
       {
         "id": "2117432e-b843-80d4-a567-c2f318931bf1",
@@ -35,7 +41,8 @@
         "depth": 2,
         "type": "condition",
         "childPolicies": [],
-        "childConditions": []
+        "childConditions": [],
+        "parentConditionId": "2117432e-b843-8148-acf9-f37156ab2ed0"
       }
     ],
     "policies": [
@@ -47,14 +54,15 @@
           "This is a test"
         ],
         "depth": 2,
-        "type": "policy"
+        "type": "policy",
+        "parentConditionId": "2117432e-b843-8148-acf9-f37156ab2ed0"
       }
     ],
     "metadata": {
       "totalConditions": 2,
       "totalPolicies": 1,
       "maxDepth": 4,
-      "extractedAt": "2025-06-20T18:43:54.159Z"
+      "extractedAt": "2025-06-20T18:53:33.003Z"
     }
   }
 }
