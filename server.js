@@ -937,7 +937,9 @@ app.get('/', (req, res) => {
       'GET /api/firebase-status', 
       'POST /api/create-graph',
       'POST /api/quick-test',
-      'GET /api/graph-data/:pageId'
+      'POST /api/ecp-structure',
+      'GET /api/graph-data/:pageId',
+      
     ]
   });
 });
@@ -1133,6 +1135,342 @@ app.post('/api/quick-test', async (req, res) => {
     });
   }
 });
+// Add this new API endpoint to your server.js file
+
+// Get ECP structure as JSON
+app.post('/api/ecp-structure', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    const { pageId, text } = req.body;
+
+    if (!pageId || !text) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required parameters: pageId and text'
+      });
+    }
+
+    console.log(`🔍 Extracting ECP structure for page ${pageId} with text "${text}"`);
+
+    // Extract toggle structure from Notion
+    const toggleStructure = await fetchToggleBlockStructure({ pageId, text });
+    console.log(`✅ Toggle structure extracted in ${Date.now() - startTime}ms`);
+    
+    // Transform to clean JSON structure
+    const ecpStructure = transformToggleToECPStructure(toggleStructure.result);
+    console.log(`✅ ECP structure created with ${ecpStructure.conditions.length} conditions and ${ecpStructure.policies.length} policies`);
+
+    res.json({
+      success: true,
+      pageId,
+      processingTimeMs: Date.now() - startTime,
+      structure: ecpStructure
+    });
+
+  } catch (error) {
+    console.error('❌ Error extracting ECP structure:', error);
+    
+    let errorMessage = error.message;
+    if (error.message.includes('No toggle')) {
+      errorMessage = `No toggle block found containing "${req.body?.text || 'N/A'}" inside any callout block`;
+    } else if (error.message.includes('No callout')) {
+      errorMessage = 'No callout blocks found in the page. Toggle blocks must be inside callout blocks.';
+    } else if (error.message.includes('timed out')) {
+      errorMessage = 'Request timed out - the toggle structure is too complex for serverless functions';
+    } else if (error.message.includes('Failed to fetch page')) {
+      errorMessage = 'Could not access the Notion page. Check the page ID and permissions.';
+    }
+
+    res.status(500).json({
+      success: false,
+      error: errorMessage,
+      platform: 'vercel',
+      processingTimeMs: Date.now() - startTime
+    });
+  }
+});
+
+// New transformation function for clean JSON structure
+function transformToggleToECPStructure(toggleStructureJson) {
+  const toggleStructure = JSON.parse(toggleStructureJson);
+  
+  // Initialize structure
+  const ecpStructure = {
+    businessECP: null,
+    conditions: [],
+    policies: [],
+    metadata: {
+      totalConditions: 0,
+      totalPolicies: 0,
+      maxDepth: 0,
+      extractedAt: new Date().toISOString()
+    }
+  };
+
+  // Helper functions for content analysis (same as existing ones)
+  function isCondition(content) {
+    return /[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(content);
+  }
+  
+  function isPolicy(content) {
+    return /←\s*Policy\s*:/.test(content);
+  }
+  
+  function extractConditionTitle(content) {
+    // Extract title from patterns like "❶ Condition (→ x=5 ←)" -> "x=5"
+    const matchWithParens = content.match(/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition\s*\(→\s*(.+?)\s*←\)/);
+    if (matchWithParens) {
+      return matchWithParens[1].trim();
+    }
+    
+    const matchAfterCondition = content.match(/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition\s+(.+)/);
+    if (matchAfterCondition) {
+      return matchAfterCondition[1].trim();
+    }
+    
+    return content;
+  }
+  
+  function extractPolicyTitle(content, block) {
+    // Extract title from patterns like "← Policy: (→ policy name ←)" -> "policy name"
+    const matchWithParens = content.match(/←\s*Policy\s*:\s*\(→\s*(.+?)\s*←\)/);
+    if (matchWithParens) {
+      const title = matchWithParens[1].trim();
+      
+      if (title.includes('Type your Policy Name Here')) {
+        const betterTitle = getFirstFiveWordsFromFirstListItem(block);
+        if (betterTitle && betterTitle !== 'Policy') {
+          return betterTitle;
+        }
+        return 'Policy (Template)';
+      }
+      
+      return title;
+    }
+    
+    const matchAfterPolicy = content.match(/←\s*Policy\s*:\s*(.+)/);
+    if (matchAfterPolicy) {
+      const title = matchAfterPolicy[1].trim();
+      const cleanedTitle = title
+        .replace(/\s*-\s*optional title.*$/i, '')
+        .replace(/^\(→\s*/, '')
+        .replace(/\s*←\)$/, '')
+        .trim();
+      
+      if (!cleanedTitle || cleanedTitle === "Type your Policy Name Here") {
+        const betterTitle = getFirstFiveWordsFromFirstListItem(block);
+        if (betterTitle && betterTitle !== 'Policy') {
+          return betterTitle;
+        }
+        return 'Policy (Empty)';
+      }
+      
+      return cleanedTitle;
+    }
+    
+    if (content.match(/←\s*Policy\s*:\s*$/)) {
+      const childTitle = getFirstFiveWordsFromFirstListItem(block);
+      if (childTitle && childTitle !== 'Policy') {
+        return childTitle;
+      }
+      return 'Policy (No Title)';
+    }
+    
+    return 'Policy (Unknown)';
+  }
+  
+  function getFirstFiveWordsFromFirstListItem(block) {
+    if (!block.children || block.children.length === 0) {
+      return null;
+    }
+    
+    for (const child of block.children) {
+      if (child.type === 'bulleted_list_item' || child.type === 'numbered_list_item') {
+        const listContent = child.content;
+        
+        if (listContent && listContent.trim()) {
+          const words = listContent.trim().split(/\s+/);
+          const firstFiveWords = words.slice(0, 5).join(' ');
+          return firstFiveWords || "List Content";
+        }
+      }
+    }
+    
+    return null;
+  }
+  
+  function cleanText(text) {
+    return text
+      .replace(/["\[\]]/g, '')
+      .replace(/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]/g, '')
+      .replace(/^\s*←?\s*/, '')
+      .replace(/^\s*→?\s*/, '')
+      .replace(/\s*←\s*$/, '')
+      .replace(/\s*→\s*$/, '')
+      .replace(/\(\s*→\s*/, '(')
+      .replace(/\s*←\s*\)/, ')')
+      .replace(/â/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function extractPolicyContent(block) {
+    const content = [];
+    
+    if (block.children && Array.isArray(block.children)) {
+      for (const child of block.children) {
+        if (child.type === 'bulleted_list_item' || child.type === 'numbered_list_item') {
+          if (child.content && child.content.trim()) {
+            content.push(child.content.trim());
+          }
+        }
+        // Recursively extract from nested children
+        if (child.children) {
+          content.push(...extractPolicyContent(child));
+        }
+      }
+    }
+    
+    return content;
+  }
+
+  function extractConditionContent(block) {
+    const content = [];
+    
+    if (block.children && Array.isArray(block.children)) {
+      for (const child of block.children) {
+        if (child.content && child.content.trim()) {
+          // Skip policy blocks within conditions
+          if (!isPolicy(child.content)) {
+            content.push(child.content.trim());
+          }
+        }
+        // Recursively extract from nested children (but not policies)
+        if (child.children && !isPolicy(child.content)) {
+          content.push(...extractConditionContent(child));
+        }
+      }
+    }
+    
+    return content;
+  }
+  
+  function processBlock(block, depth = 0) {
+    if (!block.content || block.content.trim() === '') {
+      // Process children even if current block is empty
+      if (block.children && Array.isArray(block.children)) {
+        for (const child of block.children) {
+          processBlock(child, depth);
+        }
+      }
+      return;
+    }
+    
+    const content = block.content.trim();
+    ecpStructure.metadata.maxDepth = Math.max(ecpStructure.metadata.maxDepth, depth);
+    
+    // Check if this is a Business ECP root node
+    if (depth === 0 && content.includes('Business ECP:')) {
+      let cleanedContent = content
+        .replace(/Business ECP:\s*\(?\s*→?\s*/, '')
+        .replace(/\s*←?\s*\)?\s*.*$/, '')
+        .replace(/â/g, '')
+        .trim();
+      
+      if (cleanedContent.includes('TyptestECP') || cleanedContent.includes('Type')) {
+        cleanedContent = cleanedContent.replace(/TyptestECP\s*/, '').replace(/Type.*/, '').trim();
+      }
+      
+      if (!cleanedContent) cleanedContent = 'ECP Name';
+      
+      ecpStructure.businessECP = {
+        id: block.id,
+        title: cleanedContent,
+        originalContent: content,
+        depth: depth,
+        type: 'businessECP'
+      };
+      
+      console.log(`✅ Found Business ECP: ${cleanedContent}`);
+    }
+    // Check if it's a condition
+    else if (isCondition(content)) {
+      const conditionTitle = extractConditionTitle(content);
+      const cleanedTitle = cleanText(conditionTitle);
+      const conditionContent = extractConditionContent(block);
+      
+      const condition = {
+        id: block.id,
+        title: cleanedTitle,
+        originalContent: content,
+        content: conditionContent,
+        depth: depth,
+        type: 'condition',
+        childPolicies: [] // Will be populated when we find policies under this condition
+      };
+      
+      ecpStructure.conditions.push(condition);
+      ecpStructure.metadata.totalConditions++;
+      
+      console.log(`✅ Found Condition: ${cleanedTitle}`);
+    }
+    // Check if it's a policy
+    else if (isPolicy(content)) {
+      const policyTitle = extractPolicyTitle(content, block);
+      const cleanedTitle = cleanText(policyTitle);
+      const policyContent = extractPolicyContent(block);
+      
+      const policy = {
+        id: block.id,
+        title: cleanedTitle,
+        originalContent: content,
+        content: policyContent,
+        depth: depth,
+        type: 'policy'
+      };
+      
+      ecpStructure.policies.push(policy);
+      ecpStructure.metadata.totalPolicies++;
+      
+      console.log(`✅ Found Policy: ${cleanedTitle}`);
+      
+      // Try to associate this policy with the most recent condition at a shallower depth
+      const parentCondition = ecpStructure.conditions
+        .filter(c => c.depth < depth)
+        .sort((a, b) => b.depth - a.depth)[0]; // Get the deepest parent condition
+      
+      if (parentCondition) {
+        parentCondition.childPolicies.push({
+          id: policy.id,
+          title: policy.title,
+          content: policy.content
+        });
+        console.log(`🔗 Associated policy "${cleanedTitle}" with condition "${parentCondition.title}"`);
+      }
+    }
+    
+    // Process children recursively
+    if (block.children && Array.isArray(block.children)) {
+      for (const child of block.children) {
+        processBlock(child, depth + 1);
+      }
+    }
+  }
+  
+  console.log(`🚀 Starting ECP structure extraction...`);
+  
+  // Start processing from the root toggle block
+  processBlock(toggleStructure.toggleBlock);
+  
+  console.log(`📊 ECP Structure Summary:`);
+  console.log(`   - Business ECP: ${ecpStructure.businessECP ? ecpStructure.businessECP.title : 'Not found'}`);
+  console.log(`   - Conditions: ${ecpStructure.metadata.totalConditions}`);
+  console.log(`   - Policies: ${ecpStructure.metadata.totalPolicies}`);
+  console.log(`   - Max Depth: ${ecpStructure.metadata.maxDepth}`);
+  
+  return ecpStructure;
+}
 
 // Export for Vercel
 module.exports = app;
