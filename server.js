@@ -80,7 +80,6 @@ const graphStorage = new Map();
 
 async function saveGraphToFirestore(pageId, graphData) {
   if (!isFirebaseEnabled) {
-    // Fallback to in-memory storage
     graphStorage.set(pageId, {
       ...graphData,
       lastUpdated: new Date().toISOString(),
@@ -106,7 +105,6 @@ async function saveGraphToFirestore(pageId, graphData) {
     return true;
   } catch (error) {
     console.error('❌ Error saving to Firestore:', error);
-    // Fallback to in-memory storage
     graphStorage.set(pageId, {
       ...graphData,
       lastUpdated: new Date().toISOString(),
@@ -189,7 +187,6 @@ async function appendGraphToNotionPage(notionPageId, graphUrl, graphTitle) {
   try {
     console.log(`📝 Attempting to append graph to Notion page: ${notionPageId}`);
     
-    // Verify the page exists and we have access
     const page = await notion.pages.retrieve({ page_id: notionPageId });
     
     if (!page) {
@@ -198,7 +195,6 @@ async function appendGraphToNotionPage(notionPageId, graphUrl, graphTitle) {
 
     console.log('✅ Page found, appending content...');
 
-    // Create blocks to append
     const blocksToAppend = [
       {
         object: 'block',
@@ -243,7 +239,6 @@ async function appendGraphToNotionPage(notionPageId, graphUrl, graphTitle) {
       }
     ];
 
-    // Append blocks to the page
     const response = await notion.blocks.children.append({
       block_id: notionPageId,
       children: blocksToAppend
@@ -266,7 +261,7 @@ async function appendGraphToNotionPage(notionPageId, graphUrl, graphTitle) {
 async function fetchToggleBlockStructure({ pageId, text }) {
   const baseUrl = 'https://api.notion.com/v1/blocks';
   const startTime = Date.now();
-  const TIMEOUT_BUFFER = 50000; // 50 seconds
+  const TIMEOUT_BUFFER = 50000;
 
   const checkTimeout = () => {
     if (Date.now() - startTime > TIMEOUT_BUFFER) {
@@ -283,12 +278,11 @@ async function fetchToggleBlockStructure({ pageId, text }) {
       'Content-Type': 'application/json'
     };
 
-    // Fetch page children with longer timeout
     console.log(`🔍 Fetching page children for: ${pageId}`);
     const pageResponse = await fetch(`${baseUrl}/${pageId}/children`, { 
       method: 'GET', 
       headers,
-      signal: AbortSignal.timeout(20000) // 20s timeout for page fetch
+      signal: AbortSignal.timeout(20000)
     });
     
     if (!pageResponse.ok) {
@@ -307,7 +301,6 @@ async function fetchToggleBlockStructure({ pageId, text }) {
 
     checkTimeout();
 
-    // Find toggle in callouts
     for (let i = 0; i < calloutBlocks.length; i++) {
       const callout = calloutBlocks[i];
       console.log(`🔍 Checking callout ${i + 1}/${calloutBlocks.length}`);
@@ -316,7 +309,7 @@ async function fetchToggleBlockStructure({ pageId, text }) {
         const childResponse = await fetch(`${baseUrl}/${callout.id}/children`, { 
           method: 'GET', 
           headers,
-          signal: AbortSignal.timeout(15000) // 15s timeout per callout
+          signal: AbortSignal.timeout(15000)
         });
         
         if (!childResponse.ok) {
@@ -369,7 +362,6 @@ async function fetchToggleBlockStructure({ pageId, text }) {
 }
 
 async function simplifyBlockForVercel(block, headers, depth) {
-  // REMOVED DEPTH LIMIT - process all levels
   console.log(`📊 Processing block at depth ${depth} (no limit)`);
 
   const extractContent = (richText) => {
@@ -384,7 +376,6 @@ async function simplifyBlockForVercel(block, headers, depth) {
     depth: depth
   };
 
-  // Extract content based on block type
   switch (block.type) {
     case 'toggle':
       simplified.content = extractContent(block.toggle?.rich_text);
@@ -427,20 +418,18 @@ async function simplifyBlockForVercel(block, headers, depth) {
       break;
   }
 
-  // Fetch ALL children regardless of depth
   if (block.has_children) {
     try {
       const childResponse = await fetch(`https://api.notion.com/v1/blocks/${block.id}/children`, {
         method: 'GET',
         headers,
-        signal: AbortSignal.timeout(10000) // 10s timeout per block
+        signal: AbortSignal.timeout(10000)
       });
       
       if (childResponse.ok) {
         const childData = await childResponse.json();
         console.log(`📄 Found ${childData.results.length} children at depth ${depth}`);
         
-        // Process ALL children - no limit on number or depth
         simplified.children = await Promise.all(
           childData.results.map(child => simplifyBlockForVercel(child, headers, depth + 1))
         );
@@ -455,53 +444,43 @@ async function simplifyBlockForVercel(block, headers, depth) {
   return simplified;
 }
 
-// ===== ENHANCED TRANSFORMATION FUNCTION FOR BUSINESS TOOLS =====
+// ===== TRANSFORMATION FUNCTION =====
 function transformToggleToReactFlow(toggleStructureJson) {
   const toggleStructure = JSON.parse(toggleStructureJson);
   const nodes = [];
   const edges = [];
   let nodeIdCounter = 1;
 
-  // Layout configuration with proper spacing
   const HORIZONTAL_SPACING = 350;
   const VERTICAL_SPACING = 220;
-  
-  // Track positions for layout
   const levelPositions = new Map();
   
-  // Helper functions for content analysis
   function isCondition(content) {
-    // Check for condition patterns like ❶, ❷, ❸, etc. followed by "Condition"
     return /[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(content);
   }
   
   function isEvent(content) {
-    // Check for event patterns like "← Event"
     return /←\s*Event/.test(content);
   }
   
+  function isPolicy(content) {
+    return /←\s*Policy\s*:/.test(content);
+  }
+  
   function isBusinessTool(content) {
-    // Check for Business Tool patterns
     return /Business\s*Tool/i.test(content);
   }
   
   function isJsonCode(content) {
-    // Check for JSON Code patterns like "← JSON Code Required"
     return /←\s*JSON\s*Code/.test(content);
   }
   
   function extractConditionTitle(content) {
-    // Extract title from patterns like:
-    // "❶ Condition (→ x=5 ←)" -> "x=5"
-    // "❷ Condition (→ y=2 ←)" -> "y=2"
-    
-    // First try to match with parentheses
     const matchWithParens = content.match(/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition\s*\(→\s*(.+?)\s*←\)/);
     if (matchWithParens) {
       return matchWithParens[1].trim();
     }
     
-    // Then try to match everything after "❶ Condition "
     const matchAfterCondition = content.match(/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition\s+(.+)/);
     if (matchAfterCondition) {
       return matchAfterCondition[1].trim();
@@ -510,11 +489,66 @@ function transformToggleToReactFlow(toggleStructureJson) {
     return content;
   }
   
+  function extractPolicyTitle(content, block) {
+    console.log(`🔍 Extracting policy title from: "${content}"`);
+    
+    const matchWithParens = content.match(/←\s*Policy\s*:\s*\(→\s*(.+?)\s*←\)/);
+    if (matchWithParens) {
+      const title = matchWithParens[1].trim();
+      console.log(`✅ Found policy title in parentheses: "${title}"`);
+      
+      if (title.includes('Type your Policy Name Here')) {
+        const betterTitle = getFirstWordsFromFirstListItem(block, 5);
+        if (betterTitle && betterTitle !== 'Policy') {
+          console.log(`✅ Found better policy title from children: "${betterTitle}"`);
+          return betterTitle;
+        }
+        return 'Policy (Template)';
+      }
+      
+      return title;
+    }
+    
+    const matchAfterPolicy = content.match(/←\s*Policy\s*:\s*(.+)/);
+    if (matchAfterPolicy) {
+      const title = matchAfterPolicy[1].trim();
+      console.log(`✅ Found policy title after colon: "${title}"`);
+      
+      const cleanedTitle = title
+        .replace(/\s*-\s*optional title.*$/i, '')
+        .replace(/^\(→\s*/, '')
+        .replace(/\s*←\)$/, '')
+        .trim();
+      
+      if (!cleanedTitle || cleanedTitle === "Type your Policy Name Here") {
+        const betterTitle = getFirstWordsFromFirstListItem(block, 5);
+        if (betterTitle && betterTitle !== 'Policy') {
+          console.log(`✅ Found better policy title from children: "${betterTitle}"`);
+          return betterTitle;
+        }
+        return 'Policy (Empty)';
+      }
+      
+      return cleanedTitle;
+    }
+    
+    if (content.match(/←\s*Policy\s*:\s*$/)) {
+      console.log(`🔍 Empty policy found, checking children...`);
+      const childTitle = getFirstWordsFromFirstListItem(block, 5);
+      if (childTitle && childTitle !== 'Policy') {
+        console.log(`✅ Found policy title from children: "${childTitle}"`);
+        return childTitle;
+      }
+      return 'Policy (No Title)';
+    }
+    
+    console.log(`⚠️ Could not extract policy title from: "${content}"`);
+    return 'Policy (Unknown)';
+  }
+  
   function extractEventTitle(content, block) {
-    // Extract title from patterns like "← Event"
     console.log(`🔍 Extracting event title from: "${content}"`);
     
-    // Check if it's just "← Event" without additional content
     if (content.match(/^\s*←\s*Event\s*$/)) {
       console.log(`🔍 Simple event found, checking children...`);
       const childTitle = getFirstWordsFromFirstListItem(block, 10);
@@ -525,7 +559,6 @@ function transformToggleToReactFlow(toggleStructureJson) {
       return 'Event (No Title)';
     }
     
-    // Try to extract content after "← Event"
     const matchAfterEvent = content.match(/←\s*Event\s+(.+)/);
     if (matchAfterEvent) {
       const title = matchAfterEvent[1].trim();
@@ -538,10 +571,8 @@ function transformToggleToReactFlow(toggleStructureJson) {
   }
   
   function extractJsonCodeTitle(content, block) {
-    // Extract title from patterns like "← JSON Code Required"
     console.log(`🔍 Extracting JSON Code title from: "${content}"`);
     
-    // Check for various JSON code patterns
     const matchJsonCode = content.match(/←\s*JSON\s*Code\s*(.*)/);
     if (matchJsonCode) {
       const title = matchJsonCode[1].trim() || 'Required';
@@ -559,7 +590,6 @@ function transformToggleToReactFlow(toggleStructureJson) {
     
     console.log(`🔍 Checking ${block.children.length} children for content...`);
     
-    // Find the first list item (bulleted_list_item or numbered_list_item)
     for (const child of block.children) {
       if (child.type === 'bulleted_list_item' || child.type === 'numbered_list_item') {
         const listContent = child.content;
@@ -571,9 +601,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
           console.log(`✅ Extracted first ${wordLimit} words: "${firstWords}"`);
           return firstWords || "List Content";
         }
-      }
-      // Also check code blocks for JSON Code
-      else if (child.type === 'code') {
+      } else if (child.type === 'code') {
         const codeContent = child.content;
         console.log(`💻 Found code block with content: "${codeContent}"`);
         if (codeContent && codeContent.trim()) {
@@ -588,23 +616,22 @@ function transformToggleToReactFlow(toggleStructureJson) {
   
   function cleanText(text) {
     return text
-      .replace(/["\[\]]/g, '') // Remove quotes and brackets
-      .replace(/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]/g, '') // Remove number emojis
-      .replace(/^\s*←?\s*/, '') // Remove leading arrows and spaces
-      .replace(/^\s*→?\s*/, '') // Remove right arrows
-      .replace(/\s*←\s*$/, '') // Remove trailing arrows
-      .replace(/\s*→\s*$/, '') // Remove trailing right arrows
-      .replace(/\(\s*→\s*/, '(') // Clean up arrow patterns in parentheses
-      .replace(/\s*←\s*\)/, ')') // Clean up arrow patterns in parentheses
-      .replace(/â/g, '') // Remove the â character
-      .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+      .replace(/["\[\]]/g, '')
+      .replace(/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]/g, '')
+      .replace(/^\s*←?\s*/, '')
+      .replace(/^\s*→?\s*/, '')
+      .replace(/\s*←\s*$/, '')
+      .replace(/\s*→\s*$/, '')
+      .replace(/\(\s*→\s*/, '(')
+      .replace(/\s*←\s*\)/, ')')
+      .replace(/â/g, '')
+      .replace(/\s+/g, ' ')
       .trim()
-      .substring(0, 50) // Limit length
+      .substring(0, 50)
       + (text.length > 50 ? '...' : '');
   }
   
   function createNode(block, parentId = null, level = 0) {
-    // Skip empty blocks, dividers, quotes with just "—", and unsupported blocks
     if (!block.content || 
         block.content.trim() === '' || 
         block.content === '—' || 
@@ -612,7 +639,6 @@ function transformToggleToReactFlow(toggleStructureJson) {
         block.type === 'divider' ||
         block.type === 'unsupported') {
       
-      // Still process children
       if (block.children && Array.isArray(block.children)) {
         for (const child of block.children) {
           createNode(child, parentId, level);
@@ -628,77 +654,20 @@ function transformToggleToReactFlow(toggleStructureJson) {
     
     console.log(`🔍 Processing block at level ${level}: "${content.substring(0, 100)}..."`);
     
-    // Check if this is a Business Tool root node
-    if (level === 0 && isBusinessTool(content)) {
+    // Check Business ECP FIRST
+    if (level === 0 && content.includes('Business ECP:')) {
       shouldCreateNode = true;
-      // Extract the tool name from patterns like "Business Tool" or "Business Tool: XYZ"
       let cleanedContent = content
-        .replace(/Business\s*Tool\s*:?\s*/i, '')
+        .replace(/Business ECP:\s*\(?\s*→?\s*/, '')
+        .replace(/\s*←?\s*\)?\s*.*$/, '')
+        .replace(/â/g, '')
         .trim();
       
-      if (!cleanedContent) cleanedContent = 'Tool';
+      if (cleanedContent.includes('TyptestECP') || cleanedContent.includes('Type')) {
+        cleanedContent = cleanedContent.replace(/TyptestECP\s*/, '').replace(/Type.*/, '').trim();
+      }
       
-      nodeData = {
-        label: `🛠️ Business Tool: ${cleanedContent}`,
-        originalContent: content,
-        cleanedContent: cleanedContent,
-        blockType: block.type,
-        nodeType: 'businessTool',
-        depth: level
-      };
-      nodeStyle = {
-        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-        border: 'none',
-        borderRadius: '12px',
-        fontSize: '15px',
-        fontWeight: '700',
-        padding: '20px 24px',
-        minWidth: '240px',
-        maxWidth: '320px',
-        boxShadow: '0 8px 25px rgba(102, 126, 234, 0.4)',
-        textAlign: 'center',
-        color: 'white'
-      };
-      console.log(`✅ Created Business Tool node: ${nodeData.label}`);
-    }
-    // Check if it's a condition
-    else if (isCondition(content)) {
-      shouldCreateNode = true;
-      const conditionTitle = extractConditionTitle(content);
-      const cleanedContent = cleanText(conditionTitle);
-      
-      nodeData = {
-        label: `❓ ${cleanedContent}`,
-        originalContent: content,
-        cleanedContent: cleanedContent,
-        blockType: block.type,
-        nodeType: 'condition',
-        depth: level
-      };
-      nodeStyle = {
-        background: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
-        border: 'none',
-        borderRadius: '12px',
-        fontSize: '14px',
-        fontWeight: '600',
-        padding: '18px 22px',
-        minWidth: '200px',
-        maxWidth: '300px',
-        boxShadow: '0 6px 20px rgba(246, 173, 85, 0.3)',
-        textAlign: 'center',
-        color: '#8b4513'
-      };
-      console.log(`✅ Created Condition node: ${nodeData.label}`);
-    }
-    // Check if it's an event
-    else if (isEvent(content)) {
-      console.log(`📅 Found event block: "${content.substring(0, 100)}..."`);
-      
-      const eventTitle = extractEventTitle(content, block);
-      console.log(`📅 Extracted event title: "${eventTitle}"`);
-      
-      shouldCreateNode = true;
-      const cleanedContent = cleanText(eventTitle);
+      if (!cleanedContent) cleanedContent = 'ECP Name';
       
       nodeData = {
         label: `📅 ${cleanedContent}`,
@@ -723,7 +692,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
       };
       console.log(`✅ Created Event node: ${nodeData.label}`);
     }
-    // Check if it's JSON code
+    // Check JSON Code
     else if (isJsonCode(content)) {
       console.log(`💻 Found JSON Code block: "${content.substring(0, 100)}..."`);
       
@@ -757,7 +726,6 @@ function transformToggleToReactFlow(toggleStructureJson) {
       console.log(`✅ Created JSON Code node: ${nodeData.label}`);
     }
     else {
-      // Log blocks that don't match our patterns
       console.log(`⚠️ Block doesn't match any pattern at level ${level}: "${content.substring(0, 50)}..." (type: ${block.type})`);
     }
     
@@ -767,20 +735,16 @@ function transformToggleToReactFlow(toggleStructureJson) {
       const nodeId = String(nodeIdCounter++);
       currentNodeId = nodeId;
       
-      // Initialize level tracking
       if (!levelPositions.has(level)) {
         levelPositions.set(level, 0);
       }
       
-      // Calculate position for top-to-bottom layout
-      const y = level * VERTICAL_SPACING;  // Y increases downward
+      const y = level * VERTICAL_SPACING;
       const currentPosAtLevel = levelPositions.get(level);
-      const x = currentPosAtLevel * HORIZONTAL_SPACING; // X for horizontal spacing of siblings
+      const x = currentPosAtLevel * HORIZONTAL_SPACING;
       
-      // Update level position counter
       levelPositions.set(level, currentPosAtLevel + 1);
       
-      // Create the node
       const node = {
         id: nodeId,
         position: { x, y },
@@ -791,7 +755,6 @@ function transformToggleToReactFlow(toggleStructureJson) {
       
       nodes.push(node);
       
-      // Create edge from parent if exists
       if (parentId) {
         const edgeStyle = {
           stroke: '#f6ad55',
@@ -799,7 +762,12 @@ function transformToggleToReactFlow(toggleStructureJson) {
           animated: true
         };
         
-        if (nodeData.nodeType === 'event') {
+        if (nodeData.nodeType === 'policy') {
+          edgeStyle.stroke = '#4fd1c7';
+          edgeStyle.strokeWidth = 2;
+          edgeStyle.animated = false;
+          edgeStyle.strokeDasharray = '8,4';
+        } else if (nodeData.nodeType === 'event') {
           edgeStyle.stroke = '#4fd1c7';
           edgeStyle.strokeWidth = 2;
           edgeStyle.animated = false;
@@ -831,7 +799,6 @@ function transformToggleToReactFlow(toggleStructureJson) {
       }
     }
     
-    // Process children recursively
     if (block.children && Array.isArray(block.children)) {
       for (const child of block.children) {
         createNode(child, currentNodeId || parentId, level + (shouldCreateNode ? 1 : 0));
@@ -843,17 +810,13 @@ function transformToggleToReactFlow(toggleStructureJson) {
   
   console.log(`🚀 Starting transformation of toggle structure...`);
   
-  // Start processing from the root toggle block
   createNode(toggleStructure.toggleBlock);
   
   console.log(`📊 Created ${nodes.length} nodes and ${edges.length} edges`);
   
-  // Center the layout horizontally if there are nodes
   if (nodes.length > 0) {
-    // Calculate the center offset for each level
     const levelWidths = new Map();
     
-    // Calculate actual width needed for each level
     nodes.forEach(node => {
       const level = node.data.depth;
       if (!levelWidths.has(level)) {
@@ -862,7 +825,6 @@ function transformToggleToReactFlow(toggleStructureJson) {
       levelWidths.get(level).push(node.position.x);
     });
     
-    // Center each level
     levelWidths.forEach((xPositions, level) => {
       if (xPositions.length > 1) {
         const minX = Math.min(...xPositions);
@@ -870,14 +832,12 @@ function transformToggleToReactFlow(toggleStructureJson) {
         const levelWidth = maxX - minX;
         const centerOffset = -levelWidth / 2;
         
-        // Apply centering to nodes at this level
         nodes.forEach(node => {
           if (node.data.depth === level) {
             node.position.x += centerOffset;
           }
         });
       } else if (xPositions.length === 1) {
-        // Single node, center it at x=0
         nodes.forEach(node => {
           if (node.data.depth === level) {
             node.position.x = 0;
@@ -887,13 +847,14 @@ function transformToggleToReactFlow(toggleStructureJson) {
     });
   }
   
-  // Count node types for metadata
   const nodeTypes = {
     businessTool: nodes.filter(n => n.data.nodeType === 'businessTool').length,
+    businessECP: nodes.filter(n => n.data.nodeType === 'businessECP').length,
     conditions: nodes.filter(n => n.data.nodeType === 'condition').length,
     events: nodes.filter(n => n.data.nodeType === 'event').length,
+    policies: nodes.filter(n => n.data.nodeType === 'policy').length,
     jsonCode: nodes.filter(n => n.data.nodeType === 'jsonCode').length,
-    other: nodes.filter(n => !['businessTool', 'condition', 'event', 'jsonCode'].includes(n.data.nodeType)).length
+    other: nodes.filter(n => !['businessTool', 'businessECP', 'condition', 'event', 'policy', 'jsonCode'].includes(n.data.nodeType)).length
   };
   
   console.log(`📈 Node breakdown: ${JSON.stringify(nodeTypes)}`);
@@ -910,6 +871,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
       layout: 'topToBottom',
       processingRules: {
         extractedEvents: true,
+        extractedPolicies: true,
         extractedConditionNumbers: true,
         extractedJsonCode: true,
         cleanedContent: true,
@@ -920,12 +882,210 @@ function transformToggleToReactFlow(toggleStructureJson) {
   };
 }
 
+// ===== SIMPLIFIED STRUCTURE EXTRACTION =====
+function extractSimplifiedGraphStructure(toggleStructureJson) {
+  const toggleStructure = JSON.parse(toggleStructureJson);
+  const nodes = [];
+  let nodeIdCounter = 1;
+
+  function isCondition(content) {
+    return /[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(content);
+  }
+  
+  function isEvent(content) {
+    return /←\s*Event/.test(content);
+  }
+
+  function isPolicy(content) {
+    return /←\s*Policy\s*:/.test(content);
+  }
+
+  function isBusinessTool(content) {
+    return /Business\s*Tool/i.test(content);
+  }
+
+  function isJsonCode(content) {
+    return /←\s*JSON\s*Code/.test(content);
+  }
+
+  function extractContentAsString(block) {
+    if (!block.children || block.children.length === 0) {
+      return "";
+    }
+
+    const contentItems = [];
+    
+    function extractFromChildren(children) {
+      for (const child of children) {
+        if (child.type === 'bulleted_list_item' || child.type === 'numbered_list_item') {
+          if (child.content && child.content.trim()) {
+            contentItems.push(child.content.trim());
+          }
+        } else if (child.type === 'code') {
+          if (child.content && child.content.trim()) {
+            contentItems.push(`[CODE: ${child.content.trim()}]`);
+          }
+        }
+        
+        if (child.children && child.children.length > 0) {
+          extractFromChildren(child.children);
+        }
+      }
+    }
+    
+    extractFromChildren(block.children);
+    return contentItems.join(' ');
+  }
+  
+  function createSimplifiedNode(block, parentId = null, level = 0) {
+    if (!block.content || 
+        block.content.trim() === '' || 
+        block.content === '—' || 
+        block.content === '[divider]' ||
+        block.type === 'divider' ||
+        block.type === 'unsupported') {
+      
+      if (block.children && Array.isArray(block.children)) {
+        for (const child of block.children) {
+          createSimplifiedNode(child, parentId, level);
+        }
+      }
+      return null;
+    }
+    
+    const content = block.content.trim();
+    let shouldCreateNode = false;
+    let nodeData = null;
+    
+    console.log(`🔍 Processing block at level ${level}: "${content.substring(0, 100)}..." (Block ID: ${block.id})`);
+    
+    // Business ECP (check first)
+    if (level === 0 && content.includes('Business ECP:')) {
+      shouldCreateNode = true;
+      
+      nodeData = {
+        id: String(nodeIdCounter++),
+        type: 'businessECP',
+        title: content,
+        level: level,
+        parentId: parentId,
+        notionBlockId: block.id
+      };
+      console.log(`✅ Created Business ECP node (Block ID: ${block.id})`);
+    }
+    // Business Tool
+    else if (level === 0 && isBusinessTool(content)) {
+      shouldCreateNode = true;
+      
+      nodeData = {
+        id: String(nodeIdCounter++),
+        type: 'businessTool',
+        title: content,
+        level: level,
+        parentId: parentId,
+        notionBlockId: block.id
+      };
+      console.log(`✅ Created Business Tool node (Block ID: ${block.id})`);
+    }
+    // Condition
+    else if (isCondition(content)) {
+      shouldCreateNode = true;
+      
+      nodeData = {
+        id: String(nodeIdCounter++),
+        type: 'condition',
+        title: content,
+        level: level,
+        parentId: parentId,
+        notionBlockId: block.id
+      };
+      console.log(`✅ Created Condition node (Block ID: ${block.id})`);
+    }
+    // Policy
+    else if (isPolicy(content)) {
+      console.log(`📋 Found policy block: "${content.substring(0, 100)}..." (Block ID: ${block.id})`);
+      
+      shouldCreateNode = true;
+      const policyContentString = extractContentAsString(block);
+      
+      nodeData = {
+        id: String(nodeIdCounter++),
+        type: 'policy',
+        title: content,
+        content: policyContentString,
+        level: level,
+        parentId: parentId,
+        notionBlockId: block.id
+      };
+      console.log(`✅ Created Policy node with content length: ${policyContentString.length} chars (Block ID: ${block.id})`);
+    }
+    // Event
+    else if (isEvent(content)) {
+      console.log(`📅 Found event block: "${content.substring(0, 100)}..." (Block ID: ${block.id})`);
+      
+      shouldCreateNode = true;
+      const eventContentString = extractContentAsString(block);
+      
+      nodeData = {
+        id: String(nodeIdCounter++),
+        type: 'event',
+        title: content,
+        content: eventContentString,
+        level: level,
+        parentId: parentId,
+        notionBlockId: block.id
+      };
+      console.log(`✅ Created Event node with content length: ${eventContentString.length} chars (Block ID: ${block.id})`);
+    }
+    // JSON Code
+    else if (isJsonCode(content)) {
+      console.log(`💻 Found JSON Code block: "${content.substring(0, 100)}..." (Block ID: ${block.id})`);
+      
+      shouldCreateNode = true;
+      const jsonContentString = extractContentAsString(block);
+      
+      nodeData = {
+        id: String(nodeIdCounter++),
+        type: 'jsonCode',
+        title: content,
+        content: jsonContentString,
+        level: level,
+        parentId: parentId,
+        notionBlockId: block.id
+      };
+      console.log(`✅ Created JSON Code node with content length: ${jsonContentString.length} chars (Block ID: ${block.id})`);
+    }
+    
+    let currentNodeId = null;
+    
+    if (shouldCreateNode && nodeData) {
+      currentNodeId = nodeData.id;
+      nodes.push(nodeData);
+    }
+    
+    if (block.children && Array.isArray(block.children)) {
+      for (const child of block.children) {
+        createSimplifiedNode(child, currentNodeId || parentId, level + (shouldCreateNode ? 1 : 0));
+      }
+    }
+    
+    return currentNodeId;
+  }
+  
+  console.log(`🚀 Starting simplified structure extraction...`);
+  
+  createSimplifiedNode(toggleStructure.toggleBlock);
+  
+  console.log(`📊 Created ${nodes.length} simplified nodes`);
+  
+  return nodes;
+}
+
 // ===== API ROUTES =====
 
-// Root route for Vercel
 app.get('/', (req, res) => {
   res.json({
-    message: 'Notion Graph Proxy Service - Enhanced Business Tool Support',
+    message: 'Notion Graph Proxy Service - Enhanced Business Tool & ECP Support',
     status: 'running',
     timestamp: new Date().toISOString(),
     firebase: isFirebaseEnabled ? 'enabled' : 'disabled (using memory)',
@@ -943,7 +1103,6 @@ app.get('/', (req, res) => {
   });
 });
 
-// Health check
 app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
@@ -957,7 +1116,6 @@ app.get('/health', (req, res) => {
   });
 });
 
-// Firebase status
 app.get('/api/firebase-status', (req, res) => {
   res.json({
     firebase: {
@@ -973,7 +1131,6 @@ app.get('/api/firebase-status', (req, res) => {
   });
 });
 
-// Get graph data
 app.get('/api/graph-data/:pageId', async (req, res) => {
   try {
     const { pageId } = req.params;
@@ -1005,7 +1162,6 @@ app.get('/api/graph-data/:pageId', async (req, res) => {
   }
 });
 
-// ===== NEW ENDPOINT: CREATE BUSINESS TOOL GRAPH =====
 app.post('/api/create-business-tool-graph', async (req, res) => {
   const startTime = Date.now();
   
@@ -1021,7 +1177,6 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
 
     console.log(`🛠️ Creating Business Tool graph for page ${pageId} with text "${text}"`);
 
-    // Extract and transform with timeout protection
     const toggleStructure = await fetchToggleBlockStructure({ pageId, text });
     console.log(`✅ Toggle structure extracted in ${Date.now() - startTime}ms`);
     
@@ -1030,16 +1185,13 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
     
     const cleanedGraphData = sanitizeGraphData(graphData);
 
-    // Store with unique ID
     const uniquePageId = `business-tool-${pageId}-${Date.now()}`;
     await saveGraphToFirestore(uniquePageId, cleanedGraphData);
     console.log(`✅ Graph stored with ID: ${uniquePageId}`);
 
-    // Generate URL
     const graphUrl = generateGraphUrl(uniquePageId);
     console.log(`🔗 Generated graph URL: ${graphUrl}`);
 
-    // ✨ APPEND GRAPH TO NOTION PAGE ✨
     try {
       const graphTitle = `🛠️ Business Tool Flow: ${text}`;
       const appendResult = await appendGraphToNotionPage(pageId, graphUrl, graphTitle);
@@ -1064,7 +1216,6 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
     } catch (notionError) {
       console.error('❌ Failed to add graph to Notion page:', notionError);
       
-      // Still return success for graph creation, but note the Notion error
       res.json({
         success: true,
         graphUrl: graphUrl,
@@ -1106,7 +1257,6 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
   }
 });
 
-// Create graph - Main API endpoint (existing functionality for Business ECP)
 app.post('/api/create-graph', async (req, res) => {
   const startTime = Date.now();
   
@@ -1122,7 +1272,6 @@ app.post('/api/create-graph', async (req, res) => {
 
     console.log(`🚀 Creating graph for page ${pageId} with text "${text}"`);
 
-    // Extract and transform with timeout protection
     const toggleStructure = await fetchToggleBlockStructure({ pageId, text });
     console.log(`✅ Toggle structure extracted in ${Date.now() - startTime}ms`);
     
@@ -1131,16 +1280,13 @@ app.post('/api/create-graph', async (req, res) => {
     
     const cleanedGraphData = sanitizeGraphData(graphData);
 
-    // Store with unique ID
     const uniquePageId = `notion-${pageId}-${Date.now()}`;
     await saveGraphToFirestore(uniquePageId, cleanedGraphData);
     console.log(`✅ Graph stored with ID: ${uniquePageId}`);
 
-    // Generate URL
     const graphUrl = generateGraphUrl(uniquePageId);
     console.log(`🔗 Generated graph URL: ${graphUrl}`);
 
-    // ✨ APPEND GRAPH TO NOTION PAGE ✨
     try {
       const graphTitle = `📊 Process Flow: ${text}`;
       const appendResult = await appendGraphToNotionPage(pageId, graphUrl, graphTitle);
@@ -1153,6 +1299,7 @@ app.post('/api/create-graph', async (req, res) => {
         stats: {
           nodes: cleanedGraphData.nodes.length,
           edges: cleanedGraphData.edges.length,
+          nodeTypes: cleanedGraphData.metadata.nodeTypes,
           storage: isFirebaseEnabled ? 'firebase' : 'memory',
           processingTimeMs: Date.now() - startTime
         },
@@ -1163,7 +1310,6 @@ app.post('/api/create-graph', async (req, res) => {
     } catch (notionError) {
       console.error('❌ Failed to add graph to Notion page:', notionError);
       
-      // Still return success for graph creation, but note the Notion error
       res.json({
         success: true,
         graphUrl: graphUrl,
@@ -1171,6 +1317,7 @@ app.post('/api/create-graph', async (req, res) => {
         stats: {
           nodes: cleanedGraphData.nodes.length,
           edges: cleanedGraphData.edges.length,
+          nodeTypes: cleanedGraphData.metadata.nodeTypes,
           storage: isFirebaseEnabled ? 'firebase' : 'memory',
           processingTimeMs: Date.now() - startTime
         },
@@ -1202,7 +1349,6 @@ app.post('/api/create-graph', async (req, res) => {
   }
 });
 
-// Quick test endpoint
 app.post('/api/quick-test', async (req, res) => {
   try {
     const testPageId = '2117432eb8438055a473fc7198dc3fdc';
@@ -1210,7 +1356,6 @@ app.post('/api/quick-test', async (req, res) => {
     
     console.log('🧪 Running quick test with Business Tool...');
     
-    // Call our own create-business-tool-graph endpoint
     const createResponse = await fetch(`${req.protocol}://${req.get('host')}/api/create-business-tool-graph`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -1253,15 +1398,12 @@ app.post('/api/graph-structure', async (req, res) => {
 
     console.log(`📊 Extracting graph structure for page ${pageId} with text "${text}"`);
 
-    // Extract toggle structure using existing function
     const toggleStructure = await fetchToggleBlockStructure({ pageId, text });
     console.log(`✅ Toggle structure extracted in ${Date.now() - startTime}ms`);
     
-    // Transform to simplified graph structure
     const simplifiedStructure = extractSimplifiedGraphStructure(toggleStructure.result);
     console.log(`✅ Simplified structure created: ${simplifiedStructure.length} nodes`);
 
-    // Return the simplified structure as both parsed and string format for Zapier
     res.json({
       results: simplifiedStructure,
       resultsJson: JSON.stringify(simplifiedStructure, null, 2)
@@ -1283,179 +1425,8 @@ app.post('/api/graph-structure', async (req, res) => {
   }
 });
 
-// NEW FUNCTION: Extract simplified graph structure for Business Tools
-function extractSimplifiedGraphStructure(toggleStructureJson) {
-  const toggleStructure = JSON.parse(toggleStructureJson);
-  const nodes = [];
-  let nodeIdCounter = 1;
-
-  // Helper functions (reusing existing logic)
-  function isCondition(content) {
-    return /[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(content);
-  }
-  
-  function isEvent(content) {
-    return /←\s*Event/.test(content);
-  }
-
-  function isBusinessTool(content) {
-    return /Business\s*Tool/i.test(content);
-  }
-
-  function isJsonCode(content) {
-    return /←\s*JSON\s*Code/.test(content);
-  }
-
-  function extractEventContentAsString(block) {
-    if (!block.children || block.children.length === 0) {
-      return "";
-    }
-
-    const contentItems = [];
-    
-    function extractFromChildren(children) {
-      for (const child of children) {
-        if (child.type === 'bulleted_list_item' || child.type === 'numbered_list_item') {
-          if (child.content && child.content.trim()) {
-            contentItems.push(child.content.trim());
-          }
-        } else if (child.type === 'code') {
-          if (child.content && child.content.trim()) {
-            contentItems.push(`[CODE: ${child.content.trim()}]`);
-          }
-        }
-        
-        // Recursively process nested children
-        if (child.children && child.children.length > 0) {
-          extractFromChildren(child.children);
-        }
-      }
-    }
-    
-    extractFromChildren(block.children);
-    
-    // Join all content items with newlines or spaces
-    return contentItems.join(' ');
-  }
-  
-  function createSimplifiedNode(block, parentId = null, level = 0) {
-    if (!block.content || 
-        block.content.trim() === '' || 
-        block.content === '—' || 
-        block.content === '[divider]' ||
-        block.type === 'divider' ||
-        block.type === 'unsupported') {
-      
-      if (block.children && Array.isArray(block.children)) {
-        for (const child of block.children) {
-          createSimplifiedNode(child, parentId, level);
-        }
-      }
-      return null;
-    }
-    
-    const content = block.content.trim();
-    let shouldCreateNode = false;
-    let nodeData = null;
-    
-    console.log(`🔍 Processing block at level ${level}: "${content.substring(0, 100)}..." (Block ID: ${block.id})`);
-    
-    // Business Tool
-    if (level === 0 && isBusinessTool(content)) {
-      shouldCreateNode = true;
-      
-      nodeData = {
-        id: String(nodeIdCounter++),
-        type: 'businessTool',
-        title: content, // Use original content as title
-        level: level,
-        parentId: parentId,
-        notionBlockId: block.id
-      };
-      console.log(`✅ Created Business Tool node (Block ID: ${block.id})`);
-    }
-    // Condition
-    else if (isCondition(content)) {
-      shouldCreateNode = true;
-      
-      nodeData = {
-        id: String(nodeIdCounter++),
-        type: 'condition',
-        title: content, // Use original content as title
-        level: level,
-        parentId: parentId,
-        notionBlockId: block.id
-      };
-      console.log(`✅ Created Condition node (Block ID: ${block.id})`);
-    }
-    // Event
-    else if (isEvent(content)) {
-      console.log(`📅 Found event block: "${content.substring(0, 100)}..." (Block ID: ${block.id})`);
-      
-      shouldCreateNode = true;
-      const eventContentString = extractEventContentAsString(block);
-      
-      nodeData = {
-        id: String(nodeIdCounter++),
-        type: 'event',
-        title: content, // Use original content as title
-        content: eventContentString, // Single string instead of array
-        level: level,
-        parentId: parentId,
-        notionBlockId: block.id
-      };
-      console.log(`✅ Created Event node with content length: ${eventContentString.length} chars (Block ID: ${block.id})`);
-    }
-    // JSON Code
-    else if (isJsonCode(content)) {
-      console.log(`💻 Found JSON Code block: "${content.substring(0, 100)}..." (Block ID: ${block.id})`);
-      
-      shouldCreateNode = true;
-      const jsonContentString = extractEventContentAsString(block);
-      
-      nodeData = {
-        id: String(nodeIdCounter++),
-        type: 'jsonCode',
-        title: content, // Use original content as title
-        content: jsonContentString, // Single string for code content
-        level: level,
-        parentId: parentId,
-        notionBlockId: block.id
-      };
-      console.log(`✅ Created JSON Code node with content length: ${jsonContentString.length} chars (Block ID: ${block.id})`);
-    }
-    
-    let currentNodeId = null;
-    
-    if (shouldCreateNode && nodeData) {
-      currentNodeId = nodeData.id;
-      nodes.push(nodeData);
-    }
-    
-    // Process children recursively
-    if (block.children && Array.isArray(block.children)) {
-      for (const child of block.children) {
-        createSimplifiedNode(child, currentNodeId || parentId, level + (shouldCreateNode ? 1 : 0));
-      }
-    }
-    
-    return currentNodeId;
-  }
-  
-  console.log(`🚀 Starting simplified structure extraction...`);
-  
-  // Start processing from the root toggle block
-  createSimplifiedNode(toggleStructure.toggleBlock);
-  
-  console.log(`📊 Created ${nodes.length} simplified nodes`);
-  
-  return nodes;
-}
-
-// Export for Vercel
 module.exports = app;
 
-// For local development
 if (require.main === module) {
   const PORT = process.env.PORT || 3002;
   app.listen(PORT, () => {
@@ -1463,5 +1434,6 @@ if (require.main === module) {
     console.log(`🔥 Firebase: ${isFirebaseEnabled ? 'Enabled' : 'Memory fallback'}`);
     console.log(`📝 Notion: ${NOTION_TOKEN ? 'Configured' : 'Missing'}`);
     console.log(`🛠️ Business Tool support: Enabled`);
+    console.log(`🏢 Business ECP support: Enabled`);
   });
 }
