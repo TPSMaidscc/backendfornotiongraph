@@ -829,7 +829,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
       });
 
       if (validChildren.length > 0) {
-        console.log(`📊 Processing ${validChildren.length} valid children for node ${nodeId || 'no-node'}`);
+        console.log(`📊 Processing ${validChildren.length} valid children for node ${currentNodeId || 'no-node'}`);
         
         // Calculate width for each child
         const childWidths = validChildren.map(child => calculateSubtreeWidth(child));
@@ -870,6 +870,39 @@ function transformToggleToReactFlow(toggleStructureJson) {
         }
       }
     }
+    
+    return currentNodeId;
+  }
+  
+  // Handle case where we didn't create a node but still need to process children
+  function processChildrenWithoutNode(block, parentId, level, subtreeStartX, subtreeWidth) {
+    if (block.children && Array.isArray(block.children)) {
+      const validChildren = block.children.filter(child => {
+        if (!child.content) return false;
+        const content = child.content.trim();
+        return content !== '' && content !== '—' && content !== '[divider]' &&
+               child.type !== 'divider' && child.type !== 'unsupported' &&
+               (isCondition(content) || isPolicy(content) || 
+                (child.depth === 0 && content.includes('Business ECP:')));
+      });
+
+      if (validChildren.length > 0) {
+        let currentChildX = subtreeStartX;
+        for (const child of validChildren) {
+          const childWidth = calculateSubtreeWidth(child);
+          layoutNodesWithSubtreePositioning(child, parentId, level, currentChildX, childWidth);
+          currentChildX += childWidth * HORIZONTAL_SPACING;
+        }
+      }
+    }
+  }
+  
+  // If we didn't create a node but have children, still process them
+  if (!shouldCreateNode && block.children && Array.isArray(block.children)) {
+    processChildrenWithoutNode(block, parentId, level, subtreeStartX, subtreeWidth);
+  }
+  
+  return currentNodeId;
     
     return currentNodeId;
   }
@@ -927,7 +960,6 @@ function transformToggleToReactFlow(toggleStructureJson) {
       }
     }
   };
-}
 
 // ===== API ROUTES =====
 
