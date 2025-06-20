@@ -1136,9 +1136,6 @@ app.post('/api/quick-test', async (req, res) => {
   }
 });
 
-// MODIFICATION: Update the /api/graph-structure endpoint response
-// Replace the existing endpoint with this simplified version:
-
 app.post('/api/graph-structure', async (req, res) => {
   const startTime = Date.now();
   
@@ -1161,9 +1158,10 @@ app.post('/api/graph-structure', async (req, res) => {
     const simplifiedStructure = extractSimplifiedGraphStructure(toggleStructure.result);
     console.log(`✅ Simplified structure created: ${simplifiedStructure.length} nodes`);
 
-    // Return the simplified structure wrapped in results object
+    // Return the simplified structure as both parsed and string format for Zapier
     res.json({
-      results: simplifiedStructure
+      results: simplifiedStructure,
+      resultsJson: JSON.stringify(simplifiedStructure, null, 2)
     });
 
   } catch (error) {
@@ -1182,6 +1180,7 @@ app.post('/api/graph-structure', async (req, res) => {
   }
 });
 
+// NEW FUNCTION: Extract simplified graph structure
 // NEW FUNCTION: Extract simplified graph structure
 function extractSimplifiedGraphStructure(toggleStructureJson) {
   const toggleStructure = JSON.parse(toggleStructureJson);

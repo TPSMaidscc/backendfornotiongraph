@@ -25,14 +25,14 @@ def test_graph_structure_api():
     """
     
     # API Configuration
-    BASE_URL = "https://backendfornotiongraph.vercel.app"  # Replace with your actual Vercel URL
+    BASE_URL = "https://your-vercel-app.vercel.app"  # Replace with your actual Vercel URL
     # For local testing, use: BASE_URL = "http://localhost:3002"
     
     ENDPOINT = f"{BASE_URL}/api/graph-structure"
     
     # Test data
     test_data = {
-        "pageId": "2117432eb8438077a1f8c72e2d079b61",  # Replace with your actual page ID
+        "pageId": "2117432eb8438055a473fc7198dc3fdc",  # Replace with your actual page ID
         "text": "Business ECP:"
     }
     
@@ -55,8 +55,9 @@ def test_graph_structure_api():
         print(f"📊 Status Code: {response.status_code}")
         
         if response.status_code == 200:
-            # Parse JSON response - now it's a simple array
-            nodes = response.json()
+            # Parse JSON response - now it's wrapped in results
+            data = response.json()
+            nodes = data.get('results', [])
             
             print("✅ SUCCESS!")
             print(f"📈 Total Nodes: {len(nodes)}")
@@ -106,7 +107,7 @@ def test_graph_structure_api():
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             filename = f"graph_structure_{timestamp}.json"
             with open(filename, 'w', encoding='utf-8') as f:
-                json.dump(nodes, f, indent=2, ensure_ascii=False)
+                json.dump(data, f, indent=2, ensure_ascii=False)
             print(f"\n💾 Full response saved to: {filename}")
             
         else:
@@ -131,7 +132,7 @@ def test_health_check():
     """
     Quick health check to verify the API is running
     """
-    BASE_URL = "https://backendfornotiongraph.vercel.app"  # Replace with your actual URL
+    BASE_URL = "https://your-vercel-app.vercel.app"  # Replace with your actual URL
     
     try:
         print("🏥 Testing health check...")
