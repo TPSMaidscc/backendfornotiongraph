@@ -1107,61 +1107,108 @@ app.post('/api/graph-structure', async (req, res) => {
     const nodes = [];
     let nodeIdCounter = 1;
     
-    function extractStructure(block, parentId = null, level = 0) {
-      if (!block.content || block.content.trim() === '' || block.content === '—') {
-        if (block.children && Array.isArray(block.children)) {
-          for (const child of block.children) {
-            extractStructure(child, parentId, level);
-          }
-        }
-        return null;
-      }
-      
-      const content = block.content.trim();
-      let nodeType = null;
-      
-      if (level === 0 && content.includes('Business ECP:')) {
-        nodeType = 'businessECP';
-      } else if (level === 0 && /Business\s*Tool/i.test(content)) {
-        nodeType = 'businessTool';
-      } else if (/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(content)) {
-        nodeType = 'condition';
-      } else if (/←\s*Policy\s*:/.test(content)) {
-        nodeType = 'policy';
-      } else if (/←\s*Event/.test(content)) {
-        nodeType = 'event';
-      } else if (/←\s*JSON\s*Code/.test(content)) {
-        nodeType = 'jsonCode';
-      }
-      
-      if (nodeType) {
-        const nodeData = {
-          id: String(nodeIdCounter++),
-          type: nodeType,
-          title: content,
-          level: level,
-          parentId: parentId,
-          notionBlockId: block.id
-        };
-        
-        nodes.push(nodeData);
-        
-        if (block.children && Array.isArray(block.children)) {
-          for (const child of block.children) {
-            extractStructure(child, nodeData.id, level + 1);
-          }
-        }
-        
-        return nodeData.id;
-      } else {
-        if (block.children && Array.isArray(block.children)) {
-          for (const child of block.children) {
-            extractStructure(child, parentId, level);
-          }
-        }
-        return null;
+// Modified extractStructure function - replace the existing one in the /api/graph-structure endpoint
+
+function extractStructure(block, parentId = null, level = 0) {
+  if (!block.content || block.content.trim() === '' || block.content === '—') {
+    if (block.children && Array.isArray(block.children)) {
+      for (const child of block.children) {
+        extractStructure(child, parentId, level);
       }
     }
+    return null;
+  }
+  
+  const content = block.content.trim();
+  let nodeType = null;
+  
+  if (level === 0 && content.includes('Business ECP:')) {
+    nodeType = 'businessECP';
+  } else if (level === 0 && /Business\s*Tool/i.test(content)) {
+    nodeType = 'businessTool';
+  } else if (/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(content)) {
+    nodeType = 'condition';
+  } else if (/←\s*Policy\s*:/.test(content)) {
+    nodeType = 'policy';
+  } else if (/←\s*Event/.test(content)) {
+    nodeType = 'event';
+  } else if (/←\s*JSON\s*Code/.test(content)) {
+    nodeType = 'jsonCode';
+  }
+  
+  if (nodeType) {
+    const nodeData = {
+      id: String(nodeIdCounter++),
+      type: nodeType,
+      title: content,
+      level: level,
+      parentId: parentId,
+      notionBlockId: block.id
+    };
+    
+    // For policy nodes, extract and add the policy content
+    if (nodeType === 'policy' && block.children && Array.isArray(block.children)) {
+      const policyContentBlocks = [];
+      
+      // Collect all child content that isn't another policy/event/condition
+      for (const child of block.children) {
+        if (child.content && child.content.trim() !== '' && child.content !== '—') {
+          const childContent = child.content.trim();
+          
+          // Skip if this child is another policy/event/condition/jsonCode
+          if (!/←\s*Policy\s*:/.test(childContent) && 
+              !/←\s*Event/.test(childContent) &&
+              !/←\s*JSON\s*Code/.test(childContent) &&
+              !/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(childContent)) {
+            
+            policyContentBlocks.push(childContent);
+            
+            // Also collect content from nested children (for multi-level policy content)
+            if (child.children && Array.isArray(child.children)) {
+              const collectNestedContent = (nestedBlock) => {
+                if (nestedBlock.content && nestedBlock.content.trim() !== '' && nestedBlock.content !== '—') {
+                  const nestedContent = nestedBlock.content.trim();
+                  if (!/←\s*Policy\s*:/.test(nestedContent) && 
+                      !/←\s*Event/.test(nestedContent) &&
+                      !/←\s*JSON\s*Code/.test(nestedContent) &&
+                      !/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(nestedContent)) {
+                    policyContentBlocks.push(nestedContent);
+                  }
+                }
+                if (nestedBlock.children && Array.isArray(nestedBlock.children)) {
+                  nestedBlock.children.forEach(collectNestedContent);
+                }
+              };
+              child.children.forEach(collectNestedContent);
+            }
+          }
+        }
+      }
+      
+      // Add the policy content if any was found
+      if (policyContentBlocks.length > 0) {
+        nodeData.policyContent = policyContentBlocks.join('\n\n');
+      }
+    }
+    
+    nodes.push(nodeData);
+    
+    if (block.children && Array.isArray(block.children)) {
+      for (const child of block.children) {
+        extractStructure(child, nodeData.id, level + 1);
+      }
+    }
+    
+    return nodeData.id;
+  } else {
+    if (block.children && Array.isArray(block.children)) {
+      for (const child of block.children) {
+        extractStructure(child, parentId, level);
+      }
+    }
+    return null;
+  }
+}
     
     const parsedStructure = JSON.parse(toggleStructure.result);
     extractStructure(parsedStructure.toggleBlock);
