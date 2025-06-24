@@ -441,8 +441,8 @@ function transformToggleToReactFlow(toggleStructureJson) {
   // ===== CONFIGURABLE LAYOUT VARIABLES =====
   const NODE_WIDTH = 200;           // Fixed width for all nodes (px)
   const NODE_HEIGHT = 150;          // Fixed height for all nodes (px)
-  const HORIZONTAL_SPACING = 30;    // Fixed horizontal distance between nodes at same level (px)
-  const VERTICAL_SPACING = 100;     // Fixed vertical distance between levels (px)
+  const HORIZONTAL_SPACING = 100;    // Fixed horizontal distance between nodes at same level (px)
+  const VERTICAL_SPACING = 200;     // Fixed vertical distance between levels (px)
   
   const toggleStructure = JSON.parse(toggleStructureJson);
   const nodes = [];
