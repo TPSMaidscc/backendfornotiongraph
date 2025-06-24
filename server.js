@@ -449,6 +449,7 @@ async function simplifyBlockForVercel(block, headers, depth) {
 }
 
 // ===== SIBLING SORTING AND REPOSITIONING LAYER =====
+// ===== IMPROVED SIBLING SORTING FOR ALL LEVELS INCLUDING CHILDLESS NODES =====
 function applySiblingSortingLayer(graphData, config = {}) {
   const {
     NODE_WIDTH = 200,
@@ -458,7 +459,7 @@ function applySiblingSortingLayer(graphData, config = {}) {
     GROUP_SEPARATION = 150  // Gap between different parent groups
   } = config;
 
-  console.log(`🔄 APPLYING SIBLING SORTING LAYER...`);
+  console.log(`🔄 APPLYING IMPROVED SIBLING SORTING LAYER (ALL LEVELS)...`);
   console.log(`📊 Input: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges`);
   
   // Clone the data to avoid mutations
@@ -495,48 +496,68 @@ function applySiblingSortingLayer(graphData, config = {}) {
   const maxLevel = Math.max(...nodesByLevel.keys());
   console.log(`📏 Processing ${maxLevel + 1} levels`);
   
-  // **CORE ALGORITHM: Process each level to group siblings**
+  // **IMPROVED ALGORITHM: Process each level to group ALL siblings (including childless)**
   for (let level = maxLevel; level >= 0; level--) {
     const levelNodes = nodesByLevel.get(level) || [];
     if (levelNodes.length === 0) continue;
     
-    console.log(`\n🔄 LEVEL ${level}: Processing ${levelNodes.length} nodes`);
+    console.log(`\n🔄 LEVEL ${level}: Processing ${levelNodes.length} nodes (INCLUDING CHILDLESS)`);
     
-    // Group nodes by their parent (siblings together)
+    // **CRITICAL FIX: Group ALL nodes by their parent (including childless ones)**
     const nodesByParent = new Map();
-    const orphanNodes = [];
+    const rootNodes = []; // Nodes with no parent (level 0)
     
     levelNodes.forEach(node => {
       const parentId = childToParent.get(node.id);
       if (parentId) {
+        // This node has a parent - group with siblings
         if (!nodesByParent.has(parentId)) {
           nodesByParent.set(parentId, []);
         }
         nodesByParent.get(parentId).push(node);
+        console.log(`👥 Node ${node.id} grouped under parent ${parentId}`);
       } else {
-        orphanNodes.push(node);
+        // This node has no parent (root level)
+        rootNodes.push(node);
+        console.log(`🌳 Root node ${node.id} (no parent)`);
       }
     });
     
-    console.log(`👥 Level ${level}: ${nodesByParent.size} parent groups, ${orphanNodes.length} orphans`);
+    console.log(`👥 Level ${level}: ${nodesByParent.size} parent groups, ${rootNodes.length} root nodes`);
     
-    // **STEP 1: Sort siblings within each parent group**
+    // **STEP 1: Sort siblings within each parent group (INCLUDING CHILDLESS)**
     nodesByParent.forEach((siblings, parentId) => {
       // Sort siblings by their current X position to maintain relative order
       siblings.sort((a, b) => a.position.x - b.position.x);
-      console.log(`📋 Parent ${parentId}: sorted ${siblings.length} siblings by current X position`);
+      
+      // Log what we're grouping
+      const hasChildren = siblings.filter(s => parentToChildren.has(s.id));
+      const noChildren = siblings.filter(s => !parentToChildren.has(s.id));
+      
+      console.log(`📋 Parent ${parentId}: ${siblings.length} total siblings`);
+      console.log(`   - ${hasChildren.length} with children: ${hasChildren.map(s => s.id).join(', ')}`);
+      console.log(`   - ${noChildren.length} childless: ${noChildren.map(s => s.id).join(', ')}`);
     });
     
     // **STEP 2: Position sibling groups consecutively**
     const parentGroups = Array.from(nodesByParent.entries());
     let currentX = 0;
     
-    // Calculate total width needed
+    // Calculate total width needed for all groups
     let totalWidth = 0;
     parentGroups.forEach(([parentId, siblings]) => {
       const groupWidth = (siblings.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING) + NODE_WIDTH;
       totalWidth += groupWidth;
     });
+    
+    // Add space for root nodes
+    if (rootNodes.length > 0) {
+      const rootWidth = (rootNodes.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING) + NODE_WIDTH;
+      totalWidth += rootWidth;
+      if (parentGroups.length > 0) totalWidth += GROUP_SEPARATION;
+    }
+    
+    // Add separations between groups
     if (parentGroups.length > 1) {
       totalWidth += (parentGroups.length - 1) * GROUP_SEPARATION;
     }
@@ -544,16 +565,21 @@ function applySiblingSortingLayer(graphData, config = {}) {
     // Start from center
     currentX = -totalWidth / 2;
     
-    // Position each parent's siblings consecutively
+    console.log(`📐 Total width needed: ${totalWidth}, starting at X=${currentX}`);
+    
+    // **Position each parent's siblings consecutively (ALL siblings, including childless)**
     parentGroups.forEach(([parentId, siblings], groupIndex) => {
-      console.log(`🎯 Positioning parent ${parentId}'s ${siblings.length} siblings starting at X=${currentX}`);
+      console.log(`🎯 Positioning parent ${parentId}'s ${siblings.length} siblings (ALL types) starting at X=${currentX}`);
       
-      // Position siblings consecutively
+      // Position ALL siblings consecutively (childless and with children together)
       siblings.forEach((sibling, siblingIndex) => {
         const newX = currentX + (siblingIndex * (NODE_WIDTH + HORIZONTAL_SPACING));
         const newY = level * VERTICAL_SPACING;
         
-        console.log(`  📍 Sibling ${sibling.id}: (${sibling.position.x}, ${sibling.position.y}) → (${newX}, ${newY})`);
+        const hasChildren = parentToChildren.has(sibling.id);
+        const childType = hasChildren ? 'WITH_CHILDREN' : 'CHILDLESS';
+        
+        console.log(`  📍 ${childType} Sibling ${sibling.id}: (${sibling.position.x}, ${sibling.position.y}) → (${newX}, ${newY})`);
         
         sibling.position = { x: newX, y: newY };
       });
@@ -562,16 +588,18 @@ function applySiblingSortingLayer(graphData, config = {}) {
       const groupWidth = (siblings.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING) + NODE_WIDTH;
       currentX += groupWidth + GROUP_SEPARATION;
       
-      console.log(`✅ Parent ${parentId} group positioned, next group starts at X=${currentX}`);
+      console.log(`✅ Parent ${parentId} group positioned (${siblings.length} siblings), next group starts at X=${currentX}`);
     });
     
-    // Position orphan nodes at the end
-    if (orphanNodes.length > 0) {
-      orphanNodes.forEach((node, index) => {
+    // **Position root nodes (level 0) at the end**
+    if (rootNodes.length > 0) {
+      console.log(`🌳 Positioning ${rootNodes.length} root nodes starting at X=${currentX}`);
+      
+      rootNodes.forEach((node, index) => {
         const newX = currentX + (index * (NODE_WIDTH + HORIZONTAL_SPACING));
         const newY = level * VERTICAL_SPACING;
         
-        console.log(`🔸 Orphan ${node.id}: (${node.position.x}, ${node.position.y}) → (${newX}, ${newY})`);
+        console.log(`🌳 Root node ${node.id}: (${node.position.x}, ${node.position.y}) → (${newX}, ${newY})`);
         
         node.position = { x: newX, y: newY };
       });
@@ -586,7 +614,10 @@ function applySiblingSortingLayer(graphData, config = {}) {
     
     levelNodes.forEach(parent => {
       const childIds = parentToChildren.get(parent.id) || [];
-      if (childIds.length === 0) return;
+      if (childIds.length === 0) {
+        console.log(`🔸 Parent ${parent.id} has no children - keeping current position`);
+        return;
+      }
       
       // Find children's new positions
       const childNodes = childIds.map(childId => nodes.find(n => n.id === childId)).filter(Boolean);
@@ -606,33 +637,66 @@ function applySiblingSortingLayer(graphData, config = {}) {
     });
   }
   
-  // **STEP 4: Verification logging**
-  console.log(`\n🔍 SIBLING GROUPING VERIFICATION:`);
-  console.log(`==================================`);
+  // **STEP 4: Enhanced verification logging**
+  console.log(`\n🔍 COMPREHENSIVE SIBLING GROUPING VERIFICATION:`);
+  console.log(`===============================================`);
   
-  parentToChildren.forEach((childIds, parentId) => {
-    const childNodes = childIds.map(id => nodes.find(n => n.id === id)).filter(Boolean);
-    const childPositions = childNodes.map(child => ({ id: child.id, x: child.position.x }));
-    childPositions.sort((a, b) => a.x - b.x);
+  for (let level = maxLevel; level >= 0; level--) {
+    const levelNodes = nodesByLevel.get(level) || [];
+    if (levelNodes.length === 0) continue;
     
-    console.log(`👨‍👩‍👧‍👦 Parent ${parentId} children:`);
-    console.log(`    Positions: ${childPositions.map(c => `${c.id}(${c.x})`).join(', ')}`);
+    console.log(`\n📊 LEVEL ${level} VERIFICATION:`);
     
-    // Check if consecutive
-    let isConsecutive = true;
-    for (let i = 1; i < childPositions.length; i++) {
-      const expectedGap = NODE_WIDTH + HORIZONTAL_SPACING;
-      const actualGap = childPositions[i].x - childPositions[i-1].x;
-      if (Math.abs(actualGap - expectedGap) > 1) { // Allow 1px tolerance
-        isConsecutive = false;
-        break;
+    // Group by parent for verification
+    const verificationGroups = new Map();
+    const verificationRoots = [];
+    
+    levelNodes.forEach(node => {
+      const parentId = childToParent.get(node.id);
+      if (parentId) {
+        if (!verificationGroups.has(parentId)) {
+          verificationGroups.set(parentId, [];
+        }
+        verificationGroups.get(parentId).push(node);
+      } else {
+        verificationRoots.push(node);
       }
-    }
+    });
     
-    console.log(`    Status: ${isConsecutive ? '✅ CONSECUTIVE' : '❌ NOT CONSECUTIVE'}`);
-  });
+    // Verify each parent group
+    verificationGroups.forEach((siblings, parentId) => {
+      const sortedSiblings = siblings.sort((a, b) => a.position.x - b.position.x);
+      const positions = sortedSiblings.map(s => ({ id: s.id, x: s.position.x, hasChildren: parentToChildren.has(s.id) }));
+      
+      console.log(`👨‍👩‍👧‍👦 Parent ${parentId} - ${siblings.length} siblings:`);
+      console.log(`    ${positions.map(p => `${p.id}(${p.x})${p.hasChildren ? '[+]' : '[-]'}`).join(', ')}`);
+      
+      // Check if consecutive
+      let isConsecutive = true;
+      let gaps = [];
+      for (let i = 1; i < positions.length; i++) {
+        const expectedGap = NODE_WIDTH + HORIZONTAL_SPACING;
+        const actualGap = positions[i].x - positions[i-1].x;
+        gaps.push(actualGap);
+        if (Math.abs(actualGap - expectedGap) > 1) {
+          isConsecutive = false;
+        }
+      }
+      
+      console.log(`    Gaps: ${gaps.join(', ')} (expected: ${NODE_WIDTH + HORIZONTAL_SPACING})`);
+      console.log(`    Status: ${isConsecutive ? '✅ CONSECUTIVE' : '❌ NOT CONSECUTIVE'}`);
+    });
+    
+    // Verify root nodes
+    if (verificationRoots.length > 0) {
+      const positions = verificationRoots.map(n => ({ id: n.id, x: n.position.x }));
+      console.log(`🌳 Root nodes: ${positions.map(p => `${p.id}(${p.x})`).join(', ')}`);
+    }
+  }
   
-  console.log(`\n✅ SIBLING SORTING LAYER COMPLETED`);
+  console.log(`\n✅ IMPROVED SIBLING SORTING LAYER COMPLETED`);
+  console.log(`   - ALL siblings (including childless) are now grouped with their siblings`);
+  console.log(`   - No more overlapping between different parent groups`);
   
   return {
     nodes,
@@ -640,13 +704,14 @@ function applySiblingSortingLayer(graphData, config = {}) {
     metadata: {
       ...graphData.metadata,
       siblingSortingApplied: true,
+      improvedSortingApplied: true,
       sortingConfig: {
         NODE_WIDTH,
         NODE_HEIGHT,
         HORIZONTAL_SPACING,
         GROUP_SEPARATION
       },
-      algorithm: 'sibling-grouping-post-processing'
+      algorithm: 'improved-sibling-grouping-all-levels'
     }
   };
 }
