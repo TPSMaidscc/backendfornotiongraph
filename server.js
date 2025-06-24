@@ -437,18 +437,19 @@ async function simplifyBlockForVercel(block, headers, depth) {
   return simplified;
 }
 
-// ===== TRANSFORMATION FUNCTION =====
+// ===== TRANSFORMATION FUNCTION (DESIGN-FREE) =====
 function transformToggleToReactFlow(toggleStructureJson) {
   const toggleStructure = JSON.parse(toggleStructureJson);
   const nodes = [];
   const edges = [];
   let nodeIdCounter = 1;
 
-  const HORIZONTAL_SPACING = 350;
-  const VERTICAL_SPACING = 220;
+  // Basic positioning without visual styling
+  const HORIZONTAL_SPACING = 300;
+  const VERTICAL_SPACING = 200;
   const levelPositions = new Map();
   
-  // Helper functions
+  // Helper functions for node type detection (no styling)
   function isBusinessECP(content) {
     return content.includes('Business ECP:');
   }
@@ -473,6 +474,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
     return /←\s*JSON\s*Code/.test(content);
   }
   
+  // Extract clean title without styling concerns
   function extractTitle(content, type) {
     let title = content;
     
@@ -525,14 +527,6 @@ function transformToggleToReactFlow(toggleStructureJson) {
     return title.substring(0, 50) + (title.length > 50 ? '...' : '');
   }
   
-  function getNodeStyle(nodeType) {
-   
-  }
-  
-  function getNodeIcon(nodeType) {
-   
-  }
-  
   function createNode(block, parentId = null, level = 0) {
     if (!block.content || 
         block.content.trim() === '' || 
@@ -581,7 +575,6 @@ function transformToggleToReactFlow(toggleStructureJson) {
     
     const nodeId = String(nodeIdCounter++);
     const title = extractTitle(content, nodeType);
-    const icon = getNodeIcon(nodeType);
     
     if (!levelPositions.has(level)) {
       levelPositions.set(level, 0);
@@ -593,8 +586,9 @@ function transformToggleToReactFlow(toggleStructureJson) {
     
     levelPositions.set(level, currentPosAtLevel + 1);
     
+    // Create node with minimal data structure (no styling)
     const nodeData = {
-      label: `${icon} ${title}`,
+      label: title,
       originalContent: content,
       cleanedContent: title,
       blockType: block.type,
@@ -604,50 +598,21 @@ function transformToggleToReactFlow(toggleStructureJson) {
     
     const node = {
       id: nodeId,
+      position: { x, y },
       data: nodeData,
-      style: getNodeStyle(nodeType),
-      type: 'default'
+      type: 'custom' // Let frontend handle the styling
     };
     
     nodes.push(node);
     console.log(`✅ Created ${nodeType} node: ${nodeData.label}`);
     
-    // Create edge from parent
+    // Create edge from parent (no styling)
     if (parentId) {
-      const edgeStyle = {
-        stroke: '#f6ad55',
-        strokeWidth: 3,
-        animated: true
-      };
-      
-      if (nodeType === 'policy' || nodeType === 'event') {
-        edgeStyle.stroke = '#4fd1c7';
-        edgeStyle.strokeWidth = 2;
-        edgeStyle.animated = false;
-        edgeStyle.strokeDasharray = '8,4';
-      } else if (nodeType === 'condition') {
-        edgeStyle.stroke = '#a5b4fc';
-        edgeStyle.strokeWidth = 2;
-        edgeStyle.animated = false;
-      } else if (nodeType === 'jsonCode') {
-        edgeStyle.stroke = '#ff9a9e';
-        edgeStyle.strokeWidth = 2;
-        edgeStyle.animated = false;
-        edgeStyle.strokeDasharray = '5,5';
-      }
-      
       edges.push({
         id: `e${parentId}-${nodeId}`,
         source: parentId,
         target: nodeId,
-        type: 'smoothstep',
-        style: edgeStyle,
-        markerEnd: {
-          type: 'arrowclosed',
-          color: edgeStyle.stroke,
-          width: 20,
-          height: 20
-        }
+        type: 'smoothstep'
       });
     }
     
@@ -667,7 +632,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
   
   console.log(`📊 Created ${nodes.length} nodes and ${edges.length} edges`);
   
-  // Center layout
+  // Center layout calculation (no visual styling)
   if (nodes.length > 0) {
     const levelWidths = new Map();
     
@@ -701,7 +666,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
     });
   }
   
-  // Count node types
+  // Count node types for metadata
   const nodeTypes = {
     businessTool: nodes.filter(n => n.data.nodeType === 'businessTool').length,
     businessECP: nodes.filter(n => n.data.nodeType === 'businessECP').length,
@@ -826,25 +791,6 @@ app.post('/api/create-graph', async (req, res) => {
       const graphTitle = `🏢 Business ECP: ${text}`;
       const appendResult = await appendGraphToNotionPage(pageId, graphUrl, graphTitle);
       console.log(`✅ Graph successfully added to Notion page`);
-      
-      res.json({
-        success: true,
-        graphUrl: graphUrl,
-        graphId: uniquePageId,
-        graphType: 'businessECP',
-        stats: {
-          nodes: cleanedGraphData.nodes.length,
-          edges: cleanedGraphData.edges.length,
-          nodeTypes: cleanedGraphData.metadata.nodeTypes,
-          storage: isFirebaseEnabled ? 'firebase' : 'memory',
-          processingTimeMs: Date.now() - startTime
-        },
-        notionResult: appendResult,
-        message: `✅ Business ECP graph created successfully! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'}`
-      });
-      
-    } catch (notionError) {
-      console.error('❌ Failed to add graph to Notion page:', notionError);
       
       res.json({
         success: true,
@@ -1041,108 +987,106 @@ app.post('/api/graph-structure', async (req, res) => {
     const nodes = [];
     let nodeIdCounter = 1;
     
-// Modified extractStructure function - replace the existing one in the /api/graph-structure endpoint
-
-function extractStructure(block, parentId = null, level = 0) {
-  if (!block.content || block.content.trim() === '' || block.content === '—') {
-    if (block.children && Array.isArray(block.children)) {
-      for (const child of block.children) {
-        extractStructure(child, parentId, level);
-      }
-    }
-    return null;
-  }
-  
-  const content = block.content.trim();
-  let nodeType = null;
-  
-  if (level === 0 && content.includes('Business ECP:')) {
-    nodeType = 'businessECP';
-  } else if (level === 0 && /Business\s*Tool/i.test(content)) {
-    nodeType = 'businessTool';
-  } else if (/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(content)) {
-    nodeType = 'condition';
-  } else if (/←\s*Policy\s*:/.test(content)) {
-    nodeType = 'policy';
-  } else if (/←\s*Event/.test(content)) {
-    nodeType = 'event';
-  } else if (/←\s*JSON\s*Code/.test(content)) {
-    nodeType = 'jsonCode';
-  }
-  
-  if (nodeType) {
-    const nodeData = {
-      id: String(nodeIdCounter++),
-      type: nodeType,
-      title: content,
-      level: level,
-      parentId: parentId,
-      notionBlockId: block.id
-    };
-    
-    // For policy nodes, extract and add the policy content
-    if (nodeType === 'policy' && block.children && Array.isArray(block.children)) {
-      const policyContentBlocks = [];
-      
-      // Collect all child content that isn't another policy/event/condition
-      for (const child of block.children) {
-        if (child.content && child.content.trim() !== '' && child.content !== '—') {
-          const childContent = child.content.trim();
-          
-          // Skip if this child is another policy/event/condition/jsonCode
-          if (!/←\s*Policy\s*:/.test(childContent) && 
-              !/←\s*Event/.test(childContent) &&
-              !/←\s*JSON\s*Code/.test(childContent) &&
-              !/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(childContent)) {
-            
-            policyContentBlocks.push(childContent);
-            
-            // Also collect content from nested children (for multi-level policy content)
-            if (child.children && Array.isArray(child.children)) {
-              const collectNestedContent = (nestedBlock) => {
-                if (nestedBlock.content && nestedBlock.content.trim() !== '' && nestedBlock.content !== '—') {
-                  const nestedContent = nestedBlock.content.trim();
-                  if (!/←\s*Policy\s*:/.test(nestedContent) && 
-                      !/←\s*Event/.test(nestedContent) &&
-                      !/←\s*JSON\s*Code/.test(nestedContent) &&
-                      !/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(nestedContent)) {
-                    policyContentBlocks.push(nestedContent);
-                  }
-                }
-                if (nestedBlock.children && Array.isArray(nestedBlock.children)) {
-                  nestedBlock.children.forEach(collectNestedContent);
-                }
-              };
-              child.children.forEach(collectNestedContent);
-            }
+    function extractStructure(block, parentId = null, level = 0) {
+      if (!block.content || block.content.trim() === '' || block.content === '—') {
+        if (block.children && Array.isArray(block.children)) {
+          for (const child of block.children) {
+            extractStructure(child, parentId, level);
           }
         }
+        return null;
       }
       
-      // Add the policy content if any was found
-      if (policyContentBlocks.length > 0) {
-        nodeData.policyContent = policyContentBlocks.join('\n\n');
+      const content = block.content.trim();
+      let nodeType = null;
+      
+      if (level === 0 && content.includes('Business ECP:')) {
+        nodeType = 'businessECP';
+      } else if (level === 0 && /Business\s*Tool/i.test(content)) {
+        nodeType = 'businessTool';
+      } else if (/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(content)) {
+        nodeType = 'condition';
+      } else if (/←\s*Policy\s*:/.test(content)) {
+        nodeType = 'policy';
+      } else if (/←\s*Event/.test(content)) {
+        nodeType = 'event';
+      } else if (/←\s*JSON\s*Code/.test(content)) {
+        nodeType = 'jsonCode';
+      }
+      
+      if (nodeType) {
+        const nodeData = {
+          id: String(nodeIdCounter++),
+          type: nodeType,
+          title: content,
+          level: level,
+          parentId: parentId,
+          notionBlockId: block.id
+        };
+        
+        // For policy nodes, extract and add the policy content
+        if (nodeType === 'policy' && block.children && Array.isArray(block.children)) {
+          const policyContentBlocks = [];
+          
+          // Collect all child content that isn't another policy/event/condition
+          for (const child of block.children) {
+            if (child.content && child.content.trim() !== '' && child.content !== '—') {
+              const childContent = child.content.trim();
+              
+              // Skip if this child is another policy/event/condition/jsonCode
+              if (!/←\s*Policy\s*:/.test(childContent) && 
+                  !/←\s*Event/.test(childContent) &&
+                  !/←\s*JSON\s*Code/.test(childContent) &&
+                  !/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(childContent)) {
+                
+                policyContentBlocks.push(childContent);
+                
+                // Also collect content from nested children (for multi-level policy content)
+                if (child.children && Array.isArray(child.children)) {
+                  const collectNestedContent = (nestedBlock) => {
+                    if (nestedBlock.content && nestedBlock.content.trim() !== '' && nestedBlock.content !== '—') {
+                      const nestedContent = nestedBlock.content.trim();
+                      if (!/←\s*Policy\s*:/.test(nestedContent) && 
+                          !/←\s*Event/.test(nestedContent) &&
+                          !/←\s*JSON\s*Code/.test(nestedContent) &&
+                          !/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(nestedContent)) {
+                        policyContentBlocks.push(nestedContent);
+                      }
+                    }
+                    if (nestedBlock.children && Array.isArray(nestedBlock.children)) {
+                      nestedBlock.children.forEach(collectNestedContent);
+                    }
+                  };
+                  child.children.forEach(collectNestedContent);
+                }
+              }
+            }
+          }
+          
+          // Add the policy content if any was found
+          if (policyContentBlocks.length > 0) {
+            nodeData.policyContent = policyContentBlocks.join('\n\n');
+          }
+        }
+        
+        nodes.push(nodeData);
+        
+        if (block.children && Array.isArray(block.children)) {
+          for (const child of block.children) {
+            extractStructure(child, nodeData.id, level + 1);
+          }
+        }
+        
+        return nodeData.id;
+      } else {
+        if (block.children && Array.isArray(block.children)) {
+          for (const child of block.children) {
+            extractStructure(child, parentId, level);
+          }
+        }
+        return null;
       }
     }
-    
-    nodes.push(nodeData);
-    
-    if (block.children && Array.isArray(block.children)) {
-      for (const child of block.children) {
-        extractStructure(child, nodeData.id, level + 1);
-      }
-    }
-    
-    return nodeData.id;
-  } else {
-    if (block.children && Array.isArray(block.children)) {
-      for (const child of block.children) {
-        extractStructure(child, parentId, level);
-      }
-    }
-    return null;
-  }
-}
     
     const parsedStructure = JSON.parse(toggleStructure.result);
     extractStructure(parsedStructure.toggleBlock);
