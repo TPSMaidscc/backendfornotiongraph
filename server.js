@@ -436,14 +436,19 @@ async function simplifyBlockForVercel(block, headers, depth) {
   return simplified;
 }
 
-// ===== PURE DATA TRANSFORMATION (NO POSITIONING OR STYLING) =====
+// ===== TRANSFORMATION FUNCTION (MATCHING FRONTEND LAYOUT) =====
 function transformToggleToReactFlow(toggleStructureJson) {
   const toggleStructure = JSON.parse(toggleStructureJson);
   const nodes = [];
   const edges = [];
   let nodeIdCounter = 1;
+
+  // Frontend spacing configuration (matching exactly)
+  const HORIZONTAL_SPACING = 350;
+  const VERTICAL_SPACING = 220;
+  const levelPositions = new Map();
   
-  // Helper functions for node type detection only
+  // Helper functions for node type detection
   function isBusinessECP(content) {
     return content.includes('Business ECP:');
   }
@@ -468,7 +473,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
     return /←\s*JSON\s*Code/.test(content);
   }
   
-  // Extract clean title only - no formatting
+  // Extract clean title (matching frontend logic)
   function extractTitle(content, type) {
     let title = content;
     
@@ -542,7 +547,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
     
     console.log(`🔍 Processing block at level ${level}: "${content.substring(0, 100)}..."`);
     
-    // Determine node type only
+    // Determine node type - Business ECP FIRST (matching frontend)
     if (level === 0 && isBusinessECP(content)) {
       nodeType = 'businessECP';
     } else if (level === 0 && isBusinessTool(content)) {
@@ -570,7 +575,18 @@ function transformToggleToReactFlow(toggleStructureJson) {
     const nodeId = String(nodeIdCounter++);
     const title = extractTitle(content, nodeType);
     
-    // Create node with ONLY data - no positioning, no styling
+    // Position calculation (matching frontend logic exactly)
+    if (!levelPositions.has(level)) {
+      levelPositions.set(level, 0);
+    }
+    
+    const y = level * VERTICAL_SPACING;
+    const currentPosAtLevel = levelPositions.get(level);
+    const x = currentPosAtLevel * HORIZONTAL_SPACING;
+    
+    levelPositions.set(level, currentPosAtLevel + 1);
+    
+    // Create node with data AND position (matching frontend)
     const nodeData = {
       label: title,
       originalContent: content,
@@ -582,6 +598,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
     
     const node = {
       id: nodeId,
+      position: { x, y }, // Include position like frontend
       data: nodeData,
       type: 'custom'
     };
@@ -589,12 +606,13 @@ function transformToggleToReactFlow(toggleStructureJson) {
     nodes.push(node);
     console.log(`✅ Created ${nodeType} node: ${nodeData.label}`);
     
-    // Create edge with only relationship data - no styling
+    // Create edge (matching frontend edge structure)
     if (parentId) {
       edges.push({
         id: `e${parentId}-${nodeId}`,
         source: parentId,
-        target: nodeId
+        target: nodeId,
+        type: 'smoothstep' // Match frontend edge type
       });
     }
     
@@ -614,7 +632,41 @@ function transformToggleToReactFlow(toggleStructureJson) {
   
   console.log(`📊 Created ${nodes.length} nodes and ${edges.length} edges`);
   
-  // Count node types for metadata only
+  // Center layout calculation (matching frontend optimizeLayout function)
+  if (nodes.length > 0) {
+    const levelWidths = new Map();
+    
+    nodes.forEach(node => {
+      const level = node.data.depth;
+      if (!levelWidths.has(level)) {
+        levelWidths.set(level, []);
+      }
+      levelWidths.get(level).push(node.position.x);
+    });
+    
+    levelWidths.forEach((xPositions, level) => {
+      if (xPositions.length > 1) {
+        const minX = Math.min(...xPositions);
+        const maxX = Math.max(...xPositions);
+        const levelWidth = maxX - minX;
+        const centerOffset = -levelWidth / 2;
+        
+        nodes.forEach(node => {
+          if (node.data.depth === level) {
+            node.position.x += centerOffset;
+          }
+        });
+      } else if (xPositions.length === 1) {
+        nodes.forEach(node => {
+          if (node.data.depth === level) {
+            node.position.x = 0;
+          }
+        });
+      }
+    });
+  }
+  
+  // Count node types for metadata
   const nodeTypes = {
     businessTool: nodes.filter(n => n.data.nodeType === 'businessTool').length,
     businessECP: nodes.filter(n => n.data.nodeType === 'businessECP').length,
@@ -635,7 +687,8 @@ function transformToggleToReactFlow(toggleStructureJson) {
       totalEdges: edges.length,
       maxDepth: nodes.length > 0 ? Math.max(...nodes.map(n => n.data.depth)) : 0,
       sourceMetadata: toggleStructure.metadata,
-      nodeTypes: nodeTypes
+      nodeTypes: nodeTypes,
+      layout: 'topToBottom' // Match frontend metadata
     }
   };
 }
