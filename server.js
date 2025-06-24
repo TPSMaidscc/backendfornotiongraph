@@ -329,14 +329,13 @@ async function fetchToggleBlockStructure({ pageId, text }) {
         });
 
         if (toggle) {
-          console.log(`🎯 Processing toggle structure with NO DEPTH LIMIT...`);
+          console.log(`🎯 Processing toggle structure...`);
           const result = {
             toggleBlock: await simplifyBlockForVercel(toggle, headers, 0),
             metadata: {
               searchText: text,
               processingTimeMs: Date.now() - startTime,
-              foundInCalloutId: callout.id,
-              depthLimit: 'NONE'
+              foundInCalloutId: callout.id
             }
           };
           return { result: JSON.stringify(result, null, 2) };
@@ -355,7 +354,7 @@ async function fetchToggleBlockStructure({ pageId, text }) {
 }
 
 async function simplifyBlockForVercel(block, headers, depth) {
-  console.log(`📊 Processing block at depth ${depth} (no limit)`);
+  console.log(`📊 Processing block at depth ${depth}`);
 
   const extractContent = (richText) => {
     if (!richText || !Array.isArray(richText)) return '';
@@ -437,19 +436,14 @@ async function simplifyBlockForVercel(block, headers, depth) {
   return simplified;
 }
 
-// ===== TRANSFORMATION FUNCTION (DESIGN-FREE) =====
+// ===== PURE DATA TRANSFORMATION (NO POSITIONING OR STYLING) =====
 function transformToggleToReactFlow(toggleStructureJson) {
   const toggleStructure = JSON.parse(toggleStructureJson);
   const nodes = [];
   const edges = [];
   let nodeIdCounter = 1;
-
-  // Basic positioning without visual styling
-  const HORIZONTAL_SPACING = 300;
-  const VERTICAL_SPACING = 200;
-  const levelPositions = new Map();
   
-  // Helper functions for node type detection (no styling)
+  // Helper functions for node type detection only
   function isBusinessECP(content) {
     return content.includes('Business ECP:');
   }
@@ -474,7 +468,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
     return /←\s*JSON\s*Code/.test(content);
   }
   
-  // Extract clean title without styling concerns
+  // Extract clean title only - no formatting
   function extractTitle(content, type) {
     let title = content;
     
@@ -548,7 +542,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
     
     console.log(`🔍 Processing block at level ${level}: "${content.substring(0, 100)}..."`);
     
-    // Determine node type - Business ECP FIRST
+    // Determine node type only
     if (level === 0 && isBusinessECP(content)) {
       nodeType = 'businessECP';
     } else if (level === 0 && isBusinessTool(content)) {
@@ -576,17 +570,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
     const nodeId = String(nodeIdCounter++);
     const title = extractTitle(content, nodeType);
     
-    if (!levelPositions.has(level)) {
-      levelPositions.set(level, 0);
-    }
-    
-    const y = level * VERTICAL_SPACING;
-    const currentPosAtLevel = levelPositions.get(level);
-    const x = currentPosAtLevel * HORIZONTAL_SPACING;
-    
-    levelPositions.set(level, currentPosAtLevel + 1);
-    
-    // Create node with minimal data structure (no styling)
+    // Create node with ONLY data - no positioning, no styling
     const nodeData = {
       label: title,
       originalContent: content,
@@ -598,21 +582,19 @@ function transformToggleToReactFlow(toggleStructureJson) {
     
     const node = {
       id: nodeId,
-      position: { x, y },
       data: nodeData,
-      type: 'custom' // Let frontend handle the styling
+      type: 'custom'
     };
     
     nodes.push(node);
     console.log(`✅ Created ${nodeType} node: ${nodeData.label}`);
     
-    // Create edge from parent (no styling)
+    // Create edge with only relationship data - no styling
     if (parentId) {
       edges.push({
         id: `e${parentId}-${nodeId}`,
         source: parentId,
-        target: nodeId,
-        type: 'smoothstep'
+        target: nodeId
       });
     }
     
@@ -632,41 +614,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
   
   console.log(`📊 Created ${nodes.length} nodes and ${edges.length} edges`);
   
-  // Center layout calculation (no visual styling)
-  if (nodes.length > 0) {
-    const levelWidths = new Map();
-    
-    nodes.forEach(node => {
-      const level = node.data.depth;
-      if (!levelWidths.has(level)) {
-        levelWidths.set(level, []);
-      }
-      levelWidths.get(level).push(node.position.x);
-    });
-    
-    levelWidths.forEach((xPositions, level) => {
-      if (xPositions.length > 1) {
-        const minX = Math.min(...xPositions);
-        const maxX = Math.max(...xPositions);
-        const levelWidth = maxX - minX;
-        const centerOffset = -levelWidth / 2;
-        
-        nodes.forEach(node => {
-          if (node.data.depth === level) {
-            node.position.x += centerOffset;
-          }
-        });
-      } else if (xPositions.length === 1) {
-        nodes.forEach(node => {
-          if (node.data.depth === level) {
-            node.position.x = 0;
-          }
-        });
-      }
-    });
-  }
-  
-  // Count node types for metadata
+  // Count node types for metadata only
   const nodeTypes = {
     businessTool: nodes.filter(n => n.data.nodeType === 'businessTool').length,
     businessECP: nodes.filter(n => n.data.nodeType === 'businessECP').length,
@@ -687,8 +635,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
       totalEdges: edges.length,
       maxDepth: nodes.length > 0 ? Math.max(...nodes.map(n => n.data.depth)) : 0,
       sourceMetadata: toggleStructure.metadata,
-      nodeTypes: nodeTypes,
-      layout: 'topToBottom'
+      nodeTypes: nodeTypes
     }
   };
 }
@@ -790,12 +737,11 @@ app.post('/api/create-graph', async (req, res) => {
     try {
       const graphTitle = `🏢 Business ECP: ${text}`;
       const appendResult = await appendGraphToNotionPage(pageId, graphUrl, graphTitle);
-      console.log('✅ Graph successfully added to Notion page');
-
-      // SUCCESS response – no warning needed
-      return res.json({
+      console.log(`✅ Graph successfully added to Notion page`);
+      
+      res.json({
         success: true,
-        graphUrl,
+        graphUrl: graphUrl,
         graphId: uniquePageId,
         graphType: 'businessECP',
         stats: {
@@ -805,15 +751,16 @@ app.post('/api/create-graph', async (req, res) => {
           storage: isFirebaseEnabled ? 'firebase' : 'memory',
           processingTimeMs: Date.now() - startTime
         },
-        message: '✅ Business ECP graph created successfully!'
+        notionResult: appendResult,
+        message: `✅ Business ECP graph created successfully! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'}`
       });
+      
     } catch (notionError) {
       console.error('❌ Failed to add graph to Notion page:', notionError);
-
-      // FALLBACK response if the Notion append fails
-      return res.json({
+      
+      res.json({
         success: true,
-        graphUrl,
+        graphUrl: graphUrl,
         graphId: uniquePageId,
         graphType: 'businessECP',
         stats: {
@@ -824,35 +771,33 @@ app.post('/api/create-graph', async (req, res) => {
           processingTimeMs: Date.now() - startTime
         },
         warning: `Graph created but failed to add to Notion page: ${notionError.message}`,
-        message: '⚠️ Business ECP graph created, but could not be appended to the Notion page.'
+        message: `⚠️ Business ECP graph created successfully but couldn't add to Notion page.`
       });
     }
 
-}
-catch (error) {
-  console.error('❌ Error creating Business ECP graph:', error);
-  
-  let errorMessage = error.message;
-  if (error.message.includes('No toggle')) {
-    errorMessage = `No toggle block found containing "${req.body?.text || 'N/A'}" inside any callout block`;
-  } else if (error.message.includes('No callout')) {
-    errorMessage = 'No callout blocks found in the page. Toggle blocks must be inside callout blocks.';
-  } else if (error.message.includes('timed out')) {
-    errorMessage = 'Request timed out - the toggle structure is too complex';
-  } else if (error.message.includes('Failed to fetch page')) {
-    errorMessage = 'Could not access the Notion page. Check the page ID and permissions.';
-  }
+  } catch (error) {
+    console.error('❌ Error creating Business ECP graph:', error);
+    
+    let errorMessage = error.message;
+    if (error.message.includes('No toggle')) {
+      errorMessage = `No toggle block found containing "${req.body?.text || 'N/A'}" inside any callout block`;
+    } else if (error.message.includes('No callout')) {
+      errorMessage = 'No callout blocks found in the page. Toggle blocks must be inside callout blocks.';
+    } else if (error.message.includes('timed out')) {
+      errorMessage = 'Request timed out - the toggle structure is too complex';
+    } else if (error.message.includes('Failed to fetch page')) {
+      errorMessage = 'Could not access the Notion page. Check the page ID and permissions.';
+    }
 
-  res.status(500).json({
-    success: false,
-    error: errorMessage,
-    graphType: 'businessECP',
-    platform: 'vercel',
-    processingTimeMs: Date.now() - startTime
-  });
-}
-}
-);
+    res.status(500).json({
+      success: false,
+      error: errorMessage,
+      graphType: 'businessECP',
+      platform: 'vercel',
+      processingTimeMs: Date.now() - startTime
+    });
+  }
+});
 
 // Business Tool Graph Creation (New endpoint)
 app.post('/api/create-business-tool-graph', async (req, res) => {
