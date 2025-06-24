@@ -436,17 +436,22 @@ async function simplifyBlockForVercel(block, headers, depth) {
   return simplified;
 }
 
-// ===== TRANSFORMATION FUNCTION (MATCHING FRONTEND LAYOUT) =====
+// ===== TRANSFORMATION WITH BOTTOM-UP LAYOUT AND FIXED SPACING =====
 function transformToggleToReactFlow(toggleStructureJson) {
+  // ===== CONFIGURABLE LAYOUT VARIABLES =====
+  const NODE_WIDTH = 200;           // Fixed width for all nodes (px)
+  const NODE_HEIGHT = 150;          // Fixed height for all nodes (px)
+  const HORIZONTAL_SPACING = 30;    // Fixed horizontal distance between nodes at same level (px)
+  const VERTICAL_SPACING = 100;     // Fixed vertical distance between levels (px)
+  
   const toggleStructure = JSON.parse(toggleStructureJson);
   const nodes = [];
   const edges = [];
   let nodeIdCounter = 1;
 
-  // Frontend spacing configuration (matching exactly)
-  const HORIZONTAL_SPACING = 350;
-  const VERTICAL_SPACING = 220;
-  const levelPositions = new Map();
+  // Store relationships for bottom-up layout calculation
+  const nodeRelationships = new Map(); // parentId -> [childIds]
+  const allNodes = new Map(); // nodeId -> nodeData
   
   // Helper functions for node type detection
   function isBusinessECP(content) {
@@ -575,46 +580,40 @@ function transformToggleToReactFlow(toggleStructureJson) {
     const nodeId = String(nodeIdCounter++);
     const title = extractTitle(content, nodeType);
     
-    // Position calculation (matching frontend logic exactly)
-    if (!levelPositions.has(level)) {
-      levelPositions.set(level, 0);
-    }
-    
-    const y = level * VERTICAL_SPACING;
-    const currentPosAtLevel = levelPositions.get(level);
-    const x = currentPosAtLevel * HORIZONTAL_SPACING;
-    
-    levelPositions.set(level, currentPosAtLevel + 1);
-    
-    // Create node with data AND position (matching frontend)
+    // Create node data without position (will be calculated later)
     const nodeData = {
+      id: nodeId,
       label: title,
       originalContent: content,
       cleanedContent: title,
       blockType: block.type,
       nodeType: nodeType,
-      depth: level
+      depth: level,
+      parentId: parentId,
+      width: NODE_WIDTH,
+      height: NODE_HEIGHT
     };
     
-    const node = {
-      id: nodeId,
-      position: { x, y }, // Include position like frontend
-      data: nodeData,
-      type: 'custom'
-    };
+    // Store in allNodes map for later processing
+    allNodes.set(nodeId, nodeData);
     
-    nodes.push(node);
-    console.log(`✅ Created ${nodeType} node: ${nodeData.label}`);
-    
-    // Create edge (matching frontend edge structure)
+    // Track parent-child relationships
     if (parentId) {
+      if (!nodeRelationships.has(parentId)) {
+        nodeRelationships.set(parentId, []);
+      }
+      nodeRelationships.get(parentId).push(nodeId);
+      
+      // Create edge
       edges.push({
         id: `e${parentId}-${nodeId}`,
         source: parentId,
         target: nodeId,
-        type: 'smoothstep' // Match frontend edge type
+        type: 'smoothstep'
       });
     }
+    
+    console.log(`✅ Created ${nodeType} node: ${title}`);
     
     // Process children
     if (block.children && Array.isArray(block.children)) {
@@ -628,43 +627,121 @@ function transformToggleToReactFlow(toggleStructureJson) {
   
   console.log(`🚀 Starting transformation of toggle structure...`);
   
+  // First pass: Create all nodes and relationships
   createNode(toggleStructure.toggleBlock);
   
-  console.log(`📊 Created ${nodes.length} nodes and ${edges.length} edges`);
+  console.log(`📊 Created ${allNodes.size} nodes and ${edges.length} edges`);
   
-  // Center layout calculation (matching frontend optimizeLayout function)
-  if (nodes.length > 0) {
-    const levelWidths = new Map();
+  // ===== BOTTOM-UP LAYOUT CALCULATION =====
+  
+  // Group nodes by depth level
+  const nodesByLevel = new Map();
+  allNodes.forEach((nodeData, nodeId) => {
+    const level = nodeData.depth;
+    if (!nodesByLevel.has(level)) {
+      nodesByLevel.set(level, []);
+    }
+    nodesByLevel.get(level).push(nodeData);
+  });
+  
+  const maxLevel = Math.max(...nodesByLevel.keys());
+  console.log(`📏 Processing ${maxLevel + 1} levels for bottom-up layout`);
+  
+  // Step 1: Position bottom level (highest depth) with fixed spacing
+  const bottomLevel = maxLevel;
+  const bottomNodes = nodesByLevel.get(bottomLevel) || [];
+  
+  console.log(`🔽 Positioning bottom level (${bottomLevel}) with ${bottomNodes.length} nodes`);
+  
+  // Calculate positions for bottom level with fixed HORIZONTAL_SPACING
+  const bottomY = bottomLevel * VERTICAL_SPACING;
+  const totalBottomWidth = (bottomNodes.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING);
+  const startX = -totalBottomWidth / 2;
+  
+  bottomNodes.forEach((nodeData, index) => {
+    const x = startX + (index * (NODE_WIDTH + HORIZONTAL_SPACING));
+    nodeData.position = { x, y: bottomY };
+    console.log(`📍 Bottom node ${nodeData.id}: (${x}, ${bottomY})`);
+  });
+  
+  // Step 2: Position upper levels bottom-up, centering parents over their children
+  for (let level = maxLevel - 1; level >= 0; level--) {
+    const levelNodes = nodesByLevel.get(level) || [];
+    const y = level * VERTICAL_SPACING;
     
-    nodes.forEach(node => {
-      const level = node.data.depth;
-      if (!levelWidths.has(level)) {
-        levelWidths.set(level, []);
-      }
-      levelWidths.get(level).push(node.position.x);
-    });
+    console.log(`🔼 Processing level ${level} with ${levelNodes.length} nodes`);
     
-    levelWidths.forEach((xPositions, level) => {
-      if (xPositions.length > 1) {
-        const minX = Math.min(...xPositions);
-        const maxX = Math.max(...xPositions);
-        const levelWidth = maxX - minX;
-        const centerOffset = -levelWidth / 2;
+    levelNodes.forEach(nodeData => {
+      const children = nodeRelationships.get(nodeData.id) || [];
+      
+      if (children.length === 0) {
+        // No children, position with fixed spacing relative to siblings
+        // This will be handled after we position nodes with children
+        nodeData.position = { x: 0, y }; // Temporary position
+      } else {
+        // Has children - center over them
+        const childPositions = children.map(childId => {
+          const childNode = allNodes.get(childId);
+          return childNode.position.x;
+        });
         
-        nodes.forEach(node => {
-          if (node.data.depth === level) {
-            node.position.x += centerOffset;
-          }
-        });
-      } else if (xPositions.length === 1) {
-        nodes.forEach(node => {
-          if (node.data.depth === level) {
-            node.position.x = 0;
-          }
-        });
+        const leftmostChildX = Math.min(...childPositions);
+        const rightmostChildX = Math.max(...childPositions);
+        const centerX = (leftmostChildX + rightmostChildX) / 2;
+        
+        nodeData.position = { x: centerX, y };
+        console.log(`📍 Parent node ${nodeData.id} centered at (${centerX}, ${y}) over children [${leftmostChildX}, ${rightmostChildX}]`);
       }
     });
+    
+    // Now handle nodes without children - maintain fixed spacing
+    const nodesWithoutChildren = levelNodes.filter(node => !nodeRelationships.has(node.id) || nodeRelationships.get(node.id).length === 0);
+    const nodesWithChildren = levelNodes.filter(node => nodeRelationships.has(node.id) && nodeRelationships.get(node.id).length > 0);
+    
+    if (nodesWithoutChildren.length > 0) {
+      // Sort nodes without children and position them with fixed spacing
+      // Position them to avoid conflicts with nodes that have children
+      const occupiedXPositions = nodesWithChildren.map(node => node.position.x);
+      
+      // Find available space for nodes without children
+      let availableX = occupiedXPositions.length > 0 ? 
+        Math.max(...occupiedXPositions) + (NODE_WIDTH / 2) + HORIZONTAL_SPACING + (NODE_WIDTH / 2) : 
+        -(nodesWithoutChildren.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING) / 2;
+      
+      nodesWithoutChildren.forEach((nodeData, index) => {
+        const x = availableX + (index * (NODE_WIDTH + HORIZONTAL_SPACING));
+        nodeData.position = { x, y };
+        console.log(`📍 Childless node ${nodeData.id}: (${x}, ${y})`);
+      });
+    }
   }
+  
+  // Step 3: Convert to React Flow format
+  allNodes.forEach((nodeData) => {
+    const node = {
+      id: nodeData.id,
+      position: nodeData.position,
+      data: {
+        label: nodeData.label,
+        originalContent: nodeData.originalContent,
+        cleanedContent: nodeData.cleanedContent,
+        blockType: nodeData.blockType,
+        nodeType: nodeData.nodeType,
+        depth: nodeData.depth,
+        width: NODE_WIDTH,
+        height: NODE_HEIGHT
+      },
+      type: 'custom',
+      style: {
+        width: NODE_WIDTH,
+        height: NODE_HEIGHT
+      }
+    };
+    
+    nodes.push(node);
+  });
+  
+  console.log(`✅ Bottom-up layout completed: ${nodes.length} nodes positioned`);
   
   // Count node types for metadata
   const nodeTypes = {
@@ -688,7 +765,13 @@ function transformToggleToReactFlow(toggleStructureJson) {
       maxDepth: nodes.length > 0 ? Math.max(...nodes.map(n => n.data.depth)) : 0,
       sourceMetadata: toggleStructure.metadata,
       nodeTypes: nodeTypes,
-      layout: 'topToBottom' // Match frontend metadata
+      layout: {
+        nodeWidth: NODE_WIDTH,
+        nodeHeight: NODE_HEIGHT,
+        horizontalSpacing: HORIZONTAL_SPACING,
+        verticalSpacing: VERTICAL_SPACING,
+        type: 'bottomUpCentered'
+      }
     }
   };
 }
@@ -1146,5 +1229,6 @@ if (require.main === module) {
     console.log(`🏢 Business ECP support: Enabled`);
     console.log(`🛠️ Business Tool support: Enabled`);
     console.log(`📊 Graph structure extraction: Enabled`);
+    console.log(`🎯 Bottom-up layout algorithm: Active`);
   });
 }
