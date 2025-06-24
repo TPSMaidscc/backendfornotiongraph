@@ -526,64 +526,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
   }
   
   function getNodeStyle(nodeType) {
-    const baseStyle = {
-      border: 'none',
-      borderRadius: '12px',
-      fontWeight: '600',
-      padding: '18px 22px',
-      minWidth: '200px',
-      maxWidth: '300px',
-      textAlign: 'center'
-    };
-    
-    switch (nodeType) {
-      case 'businessECP':
-      case 'businessTool':
-        return {
-          ...baseStyle,
-          background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-          fontSize: '15px',
-          fontWeight: '700',
-          padding: '20px 24px',
-          minWidth: '240px',
-          maxWidth: '320px',
-          boxShadow: '0 8px 25px rgba(102, 126, 234, 0.4)',
-          color: 'white'
-        };
-      case 'condition':
-        return {
-          ...baseStyle,
-          background: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)',
-          fontSize: '14px',
-          boxShadow: '0 6px 20px rgba(246, 173, 85, 0.3)',
-          color: '#8b4513'
-        };
-      case 'policy':
-      case 'event':
-        return {
-          ...baseStyle,
-          background: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)',
-          fontSize: '14px',
-          boxShadow: '0 6px 20px rgba(79, 209, 199, 0.3)',
-          color: '#2d3748'
-        };
-      case 'jsonCode':
-        return {
-          ...baseStyle,
-          background: 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%)',
-          fontSize: '14px',
-          boxShadow: '0 6px 20px rgba(255, 154, 158, 0.3)',
-          color: '#7c2d12'
-        };
-      default:
-        return {
-          ...baseStyle,
-          background: 'linear-gradient(135deg, #e0e7ff 0%, #c7d2fe 100%)',
-          fontSize: '13px',
-          boxShadow: '0 6px 20px rgba(165, 180, 252, 0.3)',
-          color: '#3730a3'
-        };
-    }
+   
   }
   
   function getNodeIcon(nodeType) {
