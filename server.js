@@ -448,273 +448,106 @@ async function simplifyBlockForVercel(block, headers, depth) {
   return simplified;
 }
 
-// ===== SIBLING SORTING AND REPOSITIONING LAYER =====
-// ===== IMPROVED SIBLING SORTING FOR ALL LEVELS INCLUDING CHILDLESS NODES =====
-function applySiblingSortingLayer(graphData, config = {}) {
+/**
+ * Tidy-tree layout that guarantees siblings – including childless ones
+ * at any depth – are placed consecutively without overlap and every parent
+ * is centred over its children.
+ */
+function applySiblingSortingLayer(graphData, cfg = {}) {
   const {
     NODE_WIDTH = 200,
     NODE_HEIGHT = 150,
     HORIZONTAL_SPACING = 50,
     VERTICAL_SPACING = 200,
-    GROUP_SEPARATION = 150  // Gap between different parent groups
-  } = config;
+    GROUP_SEPARATION = 150           // gap between independent root trees
+  } = cfg;
 
-  console.log(`🔄 APPLYING IMPROVED SIBLING SORTING LAYER (ALL LEVELS)...`);
-  console.log(`📊 Input: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges`);
-  
-  // Clone the data to avoid mutations
-  const nodes = JSON.parse(JSON.stringify(graphData.nodes));
+  /* ----------  helpers & look-ups  ---------- */
+  const nodes = graphData.nodes.map(n => ({ ...n }));   // deep-clone
   const edges = [...graphData.edges];
-  
-  // Build parent-child relationships from edges
-  const parentToChildren = new Map();
-  const childToParent = new Map();
-  
-  edges.forEach(edge => {
-    const parentId = edge.source;
-    const childId = edge.target;
-    
-    if (!parentToChildren.has(parentId)) {
-      parentToChildren.set(parentId, []);
-    }
-    parentToChildren.get(parentId).push(childId);
-    childToParent.set(childId, parentId);
+
+  const idToNode          = new Map(nodes.map(n => [n.id, n]));
+  const parentToChildren  = new Map();
+  const childToParent     = new Map();
+
+  edges.forEach(({ source, target }) => {
+    if (!parentToChildren.has(source)) parentToChildren.set(source, []);
+    parentToChildren.get(source).push(target);
+    childToParent.set(target, source);
   });
-  
-  console.log(`🔗 Found ${parentToChildren.size} parents with children`);
-  
-  // Group nodes by level
-  const nodesByLevel = new Map();
-  nodes.forEach(node => {
-    const level = node.data.depth;
-    if (!nodesByLevel.has(level)) {
-      nodesByLevel.set(level, []);
+
+  /* ----------  1️⃣  bottom-up pass – subtree widths  ---------- */
+  const subtreeWidth = new Map();
+
+  function measure(id) {
+    const children = parentToChildren.get(id) || [];
+    if (children.length === 0) {
+      subtreeWidth.set(id, NODE_WIDTH);
+      return NODE_WIDTH;
     }
-    nodesByLevel.get(level).push(node);
+
+    let width = 0;
+    children.forEach((c, i) => {
+      width += measure(c);
+      if (i < children.length - 1) width += HORIZONTAL_SPACING;
+    });
+
+    width = Math.max(width, NODE_WIDTH);        // parent is at least its own width
+    subtreeWidth.set(id, width);
+    return width;
+  }
+
+  const rootIds = nodes
+    .filter(n => !childToParent.has(n.id))
+    .map(n => n.id);
+
+  rootIds.forEach(measure);
+
+  /* ----------  2️⃣  top-down pass – assign coordinates  ---------- */
+  function place(id, centreX, level) {
+    const node      = idToNode.get(id);
+    node.position   = { x: centreX, y: level * VERTICAL_SPACING };
+
+    const children = parentToChildren.get(id) || [];
+    if (children.length === 0) return;
+
+    // span of all children incl. gaps
+    let span = 0;
+    children.forEach((c, i) => {
+      span += subtreeWidth.get(c);
+      if (i < children.length - 1) span += HORIZONTAL_SPACING;
+    });
+
+    // leftmost x where the first child starts
+    let childLeft = centreX - span / 2;
+
+    children.forEach(childId => {
+      const childCentre = childLeft + subtreeWidth.get(childId) / 2;
+      place(childId, childCentre, level + 1);
+      childLeft += subtreeWidth.get(childId) + HORIZONTAL_SPACING;
+    });
+  }
+
+  let cursorX = 0;                               // lays out multiple roots left→right
+  rootIds.forEach(rid => {
+    const centre   = cursorX + subtreeWidth.get(rid) / 2;
+    place(rid, centre, 0);
+    cursorX       += subtreeWidth.get(rid) + GROUP_SEPARATION;
   });
-  
-  const maxLevel = Math.max(...nodesByLevel.keys());
-  console.log(`📏 Processing ${maxLevel + 1} levels`);
-  
-  // **IMPROVED ALGORITHM: Process each level to group ALL siblings (including childless)**
-  for (let level = maxLevel; level >= 0; level--) {
-    const levelNodes = nodesByLevel.get(level) || [];
-    if (levelNodes.length === 0) continue;
-    
-    console.log(`\n🔄 LEVEL ${level}: Processing ${levelNodes.length} nodes (INCLUDING CHILDLESS)`);
-    
-    // **CRITICAL FIX: Group ALL nodes by their parent (including childless ones)**
-    const nodesByParent = new Map();
-    const rootNodes = []; // Nodes with no parent (level 0)
-    
-    levelNodes.forEach(node => {
-      const parentId = childToParent.get(node.id);
-      if (parentId) {
-        // This node has a parent - group with siblings
-        if (!nodesByParent.has(parentId)) {
-          nodesByParent.set(parentId, []);
-        }
-        nodesByParent.get(parentId).push(node);
-        console.log(`👥 Node ${node.id} grouped under parent ${parentId}`);
-      } else {
-        // This node has no parent (root level)
-        rootNodes.push(node);
-        console.log(`🌳 Root node ${node.id} (no parent)`);
-      }
-    });
-    
-    console.log(`👥 Level ${level}: ${nodesByParent.size} parent groups, ${rootNodes.length} root nodes`);
-    
-    // **STEP 1: Sort siblings within each parent group (INCLUDING CHILDLESS)**
-    nodesByParent.forEach((siblings, parentId) => {
-      // Sort siblings by their current X position to maintain relative order
-      siblings.sort((a, b) => a.position.x - b.position.x);
-      
-      // Log what we're grouping
-      const hasChildren = siblings.filter(s => parentToChildren.has(s.id));
-      const noChildren = siblings.filter(s => !parentToChildren.has(s.id));
-      
-      console.log(`📋 Parent ${parentId}: ${siblings.length} total siblings`);
-      console.log(`   - ${hasChildren.length} with children: ${hasChildren.map(s => s.id).join(', ')}`);
-      console.log(`   - ${noChildren.length} childless: ${noChildren.map(s => s.id).join(', ')}`);
-    });
-    
-    // **STEP 2: Position sibling groups consecutively**
-    const parentGroups = Array.from(nodesByParent.entries());
-    let currentX = 0;
-    
-    // Calculate total width needed for all groups
-    let totalWidth = 0;
-    parentGroups.forEach(([parentId, siblings]) => {
-      const groupWidth = (siblings.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING) + NODE_WIDTH;
-      totalWidth += groupWidth;
-    });
-    
-    // Add space for root nodes
-    if (rootNodes.length > 0) {
-      const rootWidth = (rootNodes.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING) + NODE_WIDTH;
-      totalWidth += rootWidth;
-      if (parentGroups.length > 0) totalWidth += GROUP_SEPARATION;
-    }
-    
-    // Add separations between groups
-    if (parentGroups.length > 1) {
-      totalWidth += (parentGroups.length - 1) * GROUP_SEPARATION;
-    }
-    
-    // Start from center
-    currentX = -totalWidth / 2;
-    
-    console.log(`📐 Total width needed: ${totalWidth}, starting at X=${currentX}`);
-    
-    // **Position each parent's siblings consecutively (ALL siblings, including childless)**
-    parentGroups.forEach(([parentId, siblings], groupIndex) => {
-      console.log(`🎯 Positioning parent ${parentId}'s ${siblings.length} siblings (ALL types) starting at X=${currentX}`);
-      
-      // Position ALL siblings consecutively (childless and with children together)
-      siblings.forEach((sibling, siblingIndex) => {
-        const newX = currentX + (siblingIndex * (NODE_WIDTH + HORIZONTAL_SPACING));
-        const newY = level * VERTICAL_SPACING;
-        
-        const hasChildren = parentToChildren.has(sibling.id);
-        const childType = hasChildren ? 'WITH_CHILDREN' : 'CHILDLESS';
-        
-        console.log(`  📍 ${childType} Sibling ${sibling.id}: (${sibling.position.x}, ${sibling.position.y}) → (${newX}, ${newY})`);
-        
-        sibling.position = { x: newX, y: newY };
-      });
-      
-      // Move to next group
-      const groupWidth = (siblings.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING) + NODE_WIDTH;
-      currentX += groupWidth + GROUP_SEPARATION;
-      
-      console.log(`✅ Parent ${parentId} group positioned (${siblings.length} siblings), next group starts at X=${currentX}`);
-    });
-    
-    // **Position root nodes (level 0) at the end**
-    if (rootNodes.length > 0) {
-      console.log(`🌳 Positioning ${rootNodes.length} root nodes starting at X=${currentX}`);
-      
-      rootNodes.forEach((node, index) => {
-        const newX = currentX + (index * (NODE_WIDTH + HORIZONTAL_SPACING));
-        const newY = level * VERTICAL_SPACING;
-        
-        console.log(`🌳 Root node ${node.id}: (${node.position.x}, ${node.position.y}) → (${newX}, ${newY})`);
-        
-        node.position = { x: newX, y: newY };
-      });
-    }
-  }
-  
-  // **STEP 3: Re-center parents over their newly positioned children**
-  console.log(`\n👨‍👩‍👧‍👦 RE-CENTERING PARENTS OVER REPOSITIONED CHILDREN...`);
-  
-  for (let level = maxLevel - 1; level >= 0; level--) {
-    const levelNodes = nodesByLevel.get(level) || [];
-    
-    levelNodes.forEach(parent => {
-      const childIds = parentToChildren.get(parent.id) || [];
-      if (childIds.length === 0) {
-        console.log(`🔸 Parent ${parent.id} has no children - keeping current position`);
-        return;
-      }
-      
-      // Find children's new positions
-      const childNodes = childIds.map(childId => nodes.find(n => n.id === childId)).filter(Boolean);
-      const childXPositions = childNodes.map(child => child.position.x);
-      
-      if (childXPositions.length > 0) {
-        const leftmost = Math.min(...childXPositions);
-        const rightmost = Math.max(...childXPositions);
-        const centerX = (leftmost + rightmost) / 2;
-        const parentY = level * VERTICAL_SPACING;
-        
-        console.log(`👨‍👩‍👧‍👦 Parent ${parent.id}: (${parent.position.x}, ${parent.position.y}) → (${centerX}, ${parentY})`);
-        console.log(`    Children span: ${leftmost} to ${rightmost} (${childXPositions.length} children)`);
-        
-        parent.position = { x: centerX, y: parentY };
-      }
-    });
-  }
-  
-  // **STEP 4: Enhanced verification logging**
-  console.log(`\n🔍 COMPREHENSIVE SIBLING GROUPING VERIFICATION:`);
-  console.log(`===============================================`);
-  
-  for (let level = maxLevel; level >= 0; level--) {
-    const levelNodes = nodesByLevel.get(level) || [];
-    if (levelNodes.length === 0) continue;
-    
-    console.log(`\n📊 LEVEL ${level} VERIFICATION:`);
-    
-    // Group by parent for verification
-    const verificationGroups = new Map();
-    const verificationRoots = [];
-    
-    levelNodes.forEach(node => {
-      const parentId = childToParent.get(node.id);
-      if (parentId) {
-        if (!verificationGroups.has(parentId)) {
-          verificationGroups.set(parentId, []);
-        }
-        verificationGroups.get(parentId).push(node);
-      } else {
-        verificationRoots.push(node);
-      }
-    });
-    
-    // Verify each parent group
-    verificationGroups.forEach((siblings, parentId) => {
-      const sortedSiblings = siblings.sort((a, b) => a.position.x - b.position.x);
-      const positions = sortedSiblings.map(s => ({ id: s.id, x: s.position.x, hasChildren: parentToChildren.has(s.id) }));
-      
-      console.log(`👨‍👩‍👧‍👦 Parent ${parentId} - ${siblings.length} siblings:`);
-      console.log(`    ${positions.map(p => `${p.id}(${p.x})${p.hasChildren ? '[+]' : '[-]'}`).join(', ')}`);
-      
-      // Check if consecutive
-      let isConsecutive = true;
-      let gaps = [];
-      for (let i = 1; i < positions.length; i++) {
-        const expectedGap = NODE_WIDTH + HORIZONTAL_SPACING;
-        const actualGap = positions[i].x - positions[i-1].x;
-        gaps.push(actualGap);
-        if (Math.abs(actualGap - expectedGap) > 1) {
-          isConsecutive = false;
-        }
-      }
-      
-      console.log(`    Gaps: ${gaps.join(', ')} (expected: ${NODE_WIDTH + HORIZONTAL_SPACING})`);
-      console.log(`    Status: ${isConsecutive ? '✅ CONSECUTIVE' : '❌ NOT CONSECUTIVE'}`);
-    });
-    
-    // Verify root nodes
-    if (verificationRoots.length > 0) {
-      const positions = verificationRoots.map(n => ({ id: n.id, x: n.position.x }));
-      console.log(`🌳 Root nodes: ${positions.map(p => `${p.id}(${p.x})`).join(', ')}`);
-    }
-  }
-  
-  console.log(`\n✅ IMPROVED SIBLING SORTING LAYER COMPLETED`);
-  console.log(`   - ALL siblings (including childless) are now grouped with their siblings`);
-  console.log(`   - No more overlapping between different parent groups`);
-  
+
+  /* ----------  return updated graphData ---------- */
   return {
+    ...graphData,
     nodes,
-    edges,
     metadata: {
       ...graphData.metadata,
-      siblingSortingApplied: true,
+      siblingSortingApplied : true,
       improvedSortingApplied: true,
-      sortingConfig: {
-        NODE_WIDTH,
-        NODE_HEIGHT,
-        HORIZONTAL_SPACING,
-        GROUP_SEPARATION
-      },
-      algorithm: 'improved-sibling-grouping-all-levels'
+      algorithm             : 'tidy-tree-centred'
     }
   };
 }
+
 
 // ===== LAYOUT TRANSFORMATION WITH SIBLING SORTING =====
 function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
