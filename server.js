@@ -604,7 +604,6 @@ function transformToggleToReactFlow(toggleStructureJson) {
     
     const node = {
       id: nodeId,
-      position: { x, y },
       data: nodeData,
       style: getNodeStyle(nodeType),
       type: 'default'
