@@ -790,11 +790,30 @@ app.post('/api/create-graph', async (req, res) => {
     try {
       const graphTitle = `🏢 Business ECP: ${text}`;
       const appendResult = await appendGraphToNotionPage(pageId, graphUrl, graphTitle);
-      console.log(`✅ Graph successfully added to Notion page`);
-      
-      res.json({
+      console.log('✅ Graph successfully added to Notion page');
+
+      // SUCCESS response – no warning needed
+      return res.json({
         success: true,
-        graphUrl: graphUrl,
+        graphUrl,
+        graphId: uniquePageId,
+        graphType: 'businessECP',
+        stats: {
+          nodes: cleanedGraphData.nodes.length,
+          edges: cleanedGraphData.edges.length,
+          nodeTypes: cleanedGraphData.metadata.nodeTypes,
+          storage: isFirebaseEnabled ? 'firebase' : 'memory',
+          processingTimeMs: Date.now() - startTime
+        },
+        message: '✅ Business ECP graph created successfully!'
+      });
+    } catch (notionError) {
+      console.error('❌ Failed to add graph to Notion page:', notionError);
+
+      // FALLBACK response if the Notion append fails
+      return res.json({
+        success: true,
+        graphUrl,
         graphId: uniquePageId,
         graphType: 'businessECP',
         stats: {
@@ -805,33 +824,35 @@ app.post('/api/create-graph', async (req, res) => {
           processingTimeMs: Date.now() - startTime
         },
         warning: `Graph created but failed to add to Notion page: ${notionError.message}`,
-        message: `⚠️ Business ECP graph created successfully but couldn't add to Notion page.`
+        message: '⚠️ Business ECP graph created, but could not be appended to the Notion page.'
       });
     }
 
-  } catch (error) {
-    console.error('❌ Error creating Business ECP graph:', error);
-    
-    let errorMessage = error.message;
-    if (error.message.includes('No toggle')) {
-      errorMessage = `No toggle block found containing "${req.body?.text || 'N/A'}" inside any callout block`;
-    } else if (error.message.includes('No callout')) {
-      errorMessage = 'No callout blocks found in the page. Toggle blocks must be inside callout blocks.';
-    } else if (error.message.includes('timed out')) {
-      errorMessage = 'Request timed out - the toggle structure is too complex';
-    } else if (error.message.includes('Failed to fetch page')) {
-      errorMessage = 'Could not access the Notion page. Check the page ID and permissions.';
-    }
-
-    res.status(500).json({
-      success: false,
-      error: errorMessage,
-      graphType: 'businessECP',
-      platform: 'vercel',
-      processingTimeMs: Date.now() - startTime
-    });
+}
+catch (error) {
+  console.error('❌ Error creating Business ECP graph:', error);
+  
+  let errorMessage = error.message;
+  if (error.message.includes('No toggle')) {
+    errorMessage = `No toggle block found containing "${req.body?.text || 'N/A'}" inside any callout block`;
+  } else if (error.message.includes('No callout')) {
+    errorMessage = 'No callout blocks found in the page. Toggle blocks must be inside callout blocks.';
+  } else if (error.message.includes('timed out')) {
+    errorMessage = 'Request timed out - the toggle structure is too complex';
+  } else if (error.message.includes('Failed to fetch page')) {
+    errorMessage = 'Could not access the Notion page. Check the page ID and permissions.';
   }
-});
+
+  res.status(500).json({
+    success: false,
+    error: errorMessage,
+    graphType: 'businessECP',
+    platform: 'vercel',
+    processingTimeMs: Date.now() - startTime
+  });
+}
+}
+);
 
 // Business Tool Graph Creation (New endpoint)
 app.post('/api/create-business-tool-graph', async (req, res) => {
