@@ -655,7 +655,7 @@ function applySiblingSortingLayer(graphData, config = {}) {
       const parentId = childToParent.get(node.id);
       if (parentId) {
         if (!verificationGroups.has(parentId)) {
-          verificationGroups.set(parentId, [];
+          verificationGroups.set(parentId, []);
         }
         verificationGroups.get(parentId).push(node);
       } else {
