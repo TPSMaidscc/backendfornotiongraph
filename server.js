@@ -69,13 +69,13 @@ const notion = new Client({
 
 const graphStorage = new Map();
 
-// ===== FIXED LAYOUT CONFIGURATION =====
+// ===== LAYOUT CONFIGURATION =====
 const LAYOUT_CONFIG = {
   NODE_WIDTH: 200,           
   NODE_HEIGHT: 150,          
-  HORIZONTAL_SPACING: 120,   // Spacing WITHIN parent groups
+  HORIZONTAL_SPACING: 50,    // Gap between consecutive siblings
   VERTICAL_SPACING: 200,     
-  CHILDLESS_NODE_OFFSET: 50, 
+  CHILDLESS_NODE_OFFSET: 100, 
   CENTER_SINGLE_NODES: true, 
   PRESERVE_HIERARCHY: true   
 };
@@ -85,7 +85,7 @@ function updateLayoutConfig(newConfig) {
   console.log('📐 Layout configuration updated:', LAYOUT_CONFIG);
 }
 
-// ===== FIREBASE FUNCTIONS (unchanged) =====
+// ===== FIREBASE FUNCTIONS =====
 async function saveGraphToFirestore(pageId, graphData) {
   if (!isFirebaseEnabled) {
     graphStorage.set(pageId, {
@@ -187,7 +187,7 @@ function generateGraphUrl(pageId) {
   return `${GRAPH_BASE_URL}?page=${pageId}`;
 }
 
-// ===== NOTION INTEGRATION FUNCTIONS (unchanged) =====
+// ===== NOTION INTEGRATION FUNCTIONS =====
 async function appendGraphToNotionPage(notionPageId, graphUrl, graphTitle) {
   try {
     console.log(`📝 Attempting to append graph to Notion page: ${notionPageId}`);
@@ -233,7 +233,7 @@ async function appendGraphToNotionPage(notionPageId, graphUrl, graphTitle) {
             { 
               type: 'text', 
               text: { 
-                content: `Generated: ${new Date().toLocaleString()} | Storage: ${isFirebaseEnabled ? 'Firebase' : 'Memory'} | Layout: FIXED Children Grouping` 
+                content: `Generated: ${new Date().toLocaleString()} | Storage: ${isFirebaseEnabled ? 'Firebase' : 'Memory'} | Layout: Sibling Sorting Applied` 
               },
               annotations: {
                 color: 'gray'
@@ -448,7 +448,210 @@ async function simplifyBlockForVercel(block, headers, depth) {
   return simplified;
 }
 
-// ===== COMPLETELY FIXED LAYOUT TRANSFORMATION WITH CONSECUTIVE SIBLINGS =====
+// ===== SIBLING SORTING AND REPOSITIONING LAYER =====
+function applySiblingSortingLayer(graphData, config = {}) {
+  const {
+    NODE_WIDTH = 200,
+    NODE_HEIGHT = 150,
+    HORIZONTAL_SPACING = 50,
+    VERTICAL_SPACING = 200,
+    GROUP_SEPARATION = 150  // Gap between different parent groups
+  } = config;
+
+  console.log(`🔄 APPLYING SIBLING SORTING LAYER...`);
+  console.log(`📊 Input: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges`);
+  
+  // Clone the data to avoid mutations
+  const nodes = JSON.parse(JSON.stringify(graphData.nodes));
+  const edges = [...graphData.edges];
+  
+  // Build parent-child relationships from edges
+  const parentToChildren = new Map();
+  const childToParent = new Map();
+  
+  edges.forEach(edge => {
+    const parentId = edge.source;
+    const childId = edge.target;
+    
+    if (!parentToChildren.has(parentId)) {
+      parentToChildren.set(parentId, []);
+    }
+    parentToChildren.get(parentId).push(childId);
+    childToParent.set(childId, parentId);
+  });
+  
+  console.log(`🔗 Found ${parentToChildren.size} parents with children`);
+  
+  // Group nodes by level
+  const nodesByLevel = new Map();
+  nodes.forEach(node => {
+    const level = node.data.depth;
+    if (!nodesByLevel.has(level)) {
+      nodesByLevel.set(level, []);
+    }
+    nodesByLevel.get(level).push(node);
+  });
+  
+  const maxLevel = Math.max(...nodesByLevel.keys());
+  console.log(`📏 Processing ${maxLevel + 1} levels`);
+  
+  // **CORE ALGORITHM: Process each level to group siblings**
+  for (let level = maxLevel; level >= 0; level--) {
+    const levelNodes = nodesByLevel.get(level) || [];
+    if (levelNodes.length === 0) continue;
+    
+    console.log(`\n🔄 LEVEL ${level}: Processing ${levelNodes.length} nodes`);
+    
+    // Group nodes by their parent (siblings together)
+    const nodesByParent = new Map();
+    const orphanNodes = [];
+    
+    levelNodes.forEach(node => {
+      const parentId = childToParent.get(node.id);
+      if (parentId) {
+        if (!nodesByParent.has(parentId)) {
+          nodesByParent.set(parentId, []);
+        }
+        nodesByParent.get(parentId).push(node);
+      } else {
+        orphanNodes.push(node);
+      }
+    });
+    
+    console.log(`👥 Level ${level}: ${nodesByParent.size} parent groups, ${orphanNodes.length} orphans`);
+    
+    // **STEP 1: Sort siblings within each parent group**
+    nodesByParent.forEach((siblings, parentId) => {
+      // Sort siblings by their current X position to maintain relative order
+      siblings.sort((a, b) => a.position.x - b.position.x);
+      console.log(`📋 Parent ${parentId}: sorted ${siblings.length} siblings by current X position`);
+    });
+    
+    // **STEP 2: Position sibling groups consecutively**
+    const parentGroups = Array.from(nodesByParent.entries());
+    let currentX = 0;
+    
+    // Calculate total width needed
+    let totalWidth = 0;
+    parentGroups.forEach(([parentId, siblings]) => {
+      const groupWidth = (siblings.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING) + NODE_WIDTH;
+      totalWidth += groupWidth;
+    });
+    if (parentGroups.length > 1) {
+      totalWidth += (parentGroups.length - 1) * GROUP_SEPARATION;
+    }
+    
+    // Start from center
+    currentX = -totalWidth / 2;
+    
+    // Position each parent's siblings consecutively
+    parentGroups.forEach(([parentId, siblings], groupIndex) => {
+      console.log(`🎯 Positioning parent ${parentId}'s ${siblings.length} siblings starting at X=${currentX}`);
+      
+      // Position siblings consecutively
+      siblings.forEach((sibling, siblingIndex) => {
+        const newX = currentX + (siblingIndex * (NODE_WIDTH + HORIZONTAL_SPACING));
+        const newY = level * VERTICAL_SPACING;
+        
+        console.log(`  📍 Sibling ${sibling.id}: (${sibling.position.x}, ${sibling.position.y}) → (${newX}, ${newY})`);
+        
+        sibling.position = { x: newX, y: newY };
+      });
+      
+      // Move to next group
+      const groupWidth = (siblings.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING) + NODE_WIDTH;
+      currentX += groupWidth + GROUP_SEPARATION;
+      
+      console.log(`✅ Parent ${parentId} group positioned, next group starts at X=${currentX}`);
+    });
+    
+    // Position orphan nodes at the end
+    if (orphanNodes.length > 0) {
+      orphanNodes.forEach((node, index) => {
+        const newX = currentX + (index * (NODE_WIDTH + HORIZONTAL_SPACING));
+        const newY = level * VERTICAL_SPACING;
+        
+        console.log(`🔸 Orphan ${node.id}: (${node.position.x}, ${node.position.y}) → (${newX}, ${newY})`);
+        
+        node.position = { x: newX, y: newY };
+      });
+    }
+  }
+  
+  // **STEP 3: Re-center parents over their newly positioned children**
+  console.log(`\n👨‍👩‍👧‍👦 RE-CENTERING PARENTS OVER REPOSITIONED CHILDREN...`);
+  
+  for (let level = maxLevel - 1; level >= 0; level--) {
+    const levelNodes = nodesByLevel.get(level) || [];
+    
+    levelNodes.forEach(parent => {
+      const childIds = parentToChildren.get(parent.id) || [];
+      if (childIds.length === 0) return;
+      
+      // Find children's new positions
+      const childNodes = childIds.map(childId => nodes.find(n => n.id === childId)).filter(Boolean);
+      const childXPositions = childNodes.map(child => child.position.x);
+      
+      if (childXPositions.length > 0) {
+        const leftmost = Math.min(...childXPositions);
+        const rightmost = Math.max(...childXPositions);
+        const centerX = (leftmost + rightmost) / 2;
+        const parentY = level * VERTICAL_SPACING;
+        
+        console.log(`👨‍👩‍👧‍👦 Parent ${parent.id}: (${parent.position.x}, ${parent.position.y}) → (${centerX}, ${parentY})`);
+        console.log(`    Children span: ${leftmost} to ${rightmost} (${childXPositions.length} children)`);
+        
+        parent.position = { x: centerX, y: parentY };
+      }
+    });
+  }
+  
+  // **STEP 4: Verification logging**
+  console.log(`\n🔍 SIBLING GROUPING VERIFICATION:`);
+  console.log(`==================================`);
+  
+  parentToChildren.forEach((childIds, parentId) => {
+    const childNodes = childIds.map(id => nodes.find(n => n.id === id)).filter(Boolean);
+    const childPositions = childNodes.map(child => ({ id: child.id, x: child.position.x }));
+    childPositions.sort((a, b) => a.x - b.x);
+    
+    console.log(`👨‍👩‍👧‍👦 Parent ${parentId} children:`);
+    console.log(`    Positions: ${childPositions.map(c => `${c.id}(${c.x})`).join(', ')}`);
+    
+    // Check if consecutive
+    let isConsecutive = true;
+    for (let i = 1; i < childPositions.length; i++) {
+      const expectedGap = NODE_WIDTH + HORIZONTAL_SPACING;
+      const actualGap = childPositions[i].x - childPositions[i-1].x;
+      if (Math.abs(actualGap - expectedGap) > 1) { // Allow 1px tolerance
+        isConsecutive = false;
+        break;
+      }
+    }
+    
+    console.log(`    Status: ${isConsecutive ? '✅ CONSECUTIVE' : '❌ NOT CONSECUTIVE'}`);
+  });
+  
+  console.log(`\n✅ SIBLING SORTING LAYER COMPLETED`);
+  
+  return {
+    nodes,
+    edges,
+    metadata: {
+      ...graphData.metadata,
+      siblingSortingApplied: true,
+      sortingConfig: {
+        NODE_WIDTH,
+        NODE_HEIGHT,
+        HORIZONTAL_SPACING,
+        GROUP_SEPARATION
+      },
+      algorithm: 'sibling-grouping-post-processing'
+    }
+  };
+}
+
+// ===== LAYOUT TRANSFORMATION WITH SIBLING SORTING =====
 function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
   const config = { ...LAYOUT_CONFIG, ...customConfig };
   
@@ -462,7 +665,7 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
     PRESERVE_HIERARCHY
   } = config;
 
-  console.log(`🔧 Using CONSECUTIVE SIBLINGS layout configuration:`, config);
+  console.log(`🔧 Using layout configuration:`, config);
   
   const toggleStructure = JSON.parse(toggleStructureJson);
   const nodes = [];
@@ -630,7 +833,9 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
         id: `e${parentId}-${nodeId}`,
         source: parentId,
         target: nodeId,
-        type: 'smoothstep'
+        type: 'smoothstep',
+        style: { stroke: 'black', strokeWidth: 2 },
+        markerEnd: { type: 'arrowclosed', color: 'black', width: 20, height: 20 }
       });
     }
     
@@ -645,136 +850,34 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
     return nodeId;
   }
   
-  console.log(`🚀 Starting CONSECUTIVE SIBLINGS layout transformation...`);
+  console.log(`🚀 Starting layout transformation...`);
   
   createNode(toggleStructure.toggleBlock);
   
   console.log(`📊 Created ${allNodes.size} nodes and ${edges.length} edges`);
   
-  // ===== FIXED CONSECUTIVE SIBLINGS LAYOUT =====
-  
+  // Basic layout algorithm (will be fixed by sibling sorting layer)
   const maxLevel = Math.max(...nodesByLevel.keys());
-  console.log(`📏 Processing ${maxLevel + 1} levels for CONSECUTIVE SIBLINGS layout`);
+  console.log(`📏 Processing ${maxLevel + 1} levels`);
   
-  // Start from the deepest level and work upwards
+  // Position nodes level by level
   for (let level = maxLevel; level >= 0; level--) {
     const levelNodes = nodesByLevel.get(level) || [];
     const y = level * VERTICAL_SPACING;
     
-    console.log(`🔄 Processing level ${level} with ${levelNodes.length} nodes`);
+    if (levelNodes.length === 0) continue;
     
-    if (level === maxLevel) {
-      // For the bottom level, group children by parent and position consecutively
-      const nodesByParent = new Map();
-      const orphanNodes = [];
-      
-      levelNodes.forEach(node => {
-        if (node.parentId) {
-          if (!nodesByParent.has(node.parentId)) {
-            nodesByParent.set(node.parentId, []);
-          }
-          nodesByParent.get(node.parentId).push(node);
-        } else {
-          orphanNodes.push(node);
-        }
-      });
-      
-      console.log(`📊 Bottom level grouping: ${nodesByParent.size} parent groups, ${orphanNodes.length} orphan nodes`);
-      
-      // Position each parent's children CONSECUTIVELY
-      const parentGroups = Array.from(nodesByParent.entries());
-      const GROUP_SEPARATION = HORIZONTAL_SPACING * 2; // Moderate gap between parent groups
-      
-      let currentX = 0;
-      
-      // Calculate total width needed for all groups
-      let totalWidth = 0;
-      parentGroups.forEach(([parentId, children]) => {
-        const groupWidth = (children.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING) + NODE_WIDTH;
-        totalWidth += groupWidth;
-      });
-      if (parentGroups.length > 1) {
-        totalWidth += (parentGroups.length - 1) * GROUP_SEPARATION;
-      }
-      
-      // Start from the left edge to center everything
-      currentX = -totalWidth / 2;
-      
-      parentGroups.forEach(([parentId, children], groupIndex) => {
-        console.log(`🔧 Positioning group for parent ${parentId}: ${children.length} children CONSECUTIVELY`);
-        
-        // Position this parent's children CONSECUTIVELY starting from currentX
-        children.forEach((child, childIndex) => {
-          const childX = currentX + (childIndex * (NODE_WIDTH + HORIZONTAL_SPACING));
-          child.position = { x: childX, y };
-          console.log(`🎯 CONSECUTIVE child ${child.id}: (${childX}, ${y}) [parent: ${parentId}, index: ${childIndex}]`);
-        });
-        
-        // Move currentX to start of next group
-        const groupWidth = (children.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING) + NODE_WIDTH;
-        currentX += groupWidth + GROUP_SEPARATION;
-      });
-      
-      // Position orphan nodes at the end
-      if (orphanNodes.length > 0) {
-        orphanNodes.forEach((node, index) => {
-          const x = currentX + (index * (NODE_WIDTH + HORIZONTAL_SPACING));
-          node.position = { x, y };
-          console.log(`📍 Orphan node ${node.id}: (${x}, ${y})`);
-        });
-      }
-      
-    } else {
-      // For upper levels, center parents over their children
-      const nodesWithChildren = levelNodes.filter(node => 
-        nodeRelationships.has(node.id) && nodeRelationships.get(node.id).length > 0
-      );
-      const nodesWithoutChildren = levelNodes.filter(node => 
-        !nodeRelationships.has(node.id) || nodeRelationships.get(node.id).length === 0
-      );
-      
-      // Center parents over their CONSECUTIVE children
-      nodesWithChildren.forEach(nodeData => {
-        const children = nodeRelationships.get(nodeData.id) || [];
-        const childPositions = children.map(childId => {
-          const childNode = allNodes.get(childId);
-          return childNode.position.x;
-        });
-        
-        if (childPositions.length > 0) {
-          const leftmostChildX = Math.min(...childPositions);
-          const rightmostChildX = Math.max(...childPositions);
-          const centerX = (leftmostChildX + rightmostChildX) / 2;
-          
-          nodeData.position = { x: centerX, y };
-          console.log(`🎯 Parent ${nodeData.id} CENTERED at (${centerX}, ${y}) over consecutive children [${leftmostChildX}, ${rightmostChildX}]`);
-        }
-      });
-      
-      // Position childless nodes to the right
-      if (nodesWithoutChildren.length > 0) {
-        const allPositionedX = nodesWithChildren.map(node => node.position.x);
-        let startX;
-        
-        if (allPositionedX.length === 0) {
-          if (nodesWithoutChildren.length === 1 && CENTER_SINGLE_NODES) {
-            startX = 0;
-          } else {
-            const totalWidth = (nodesWithoutChildren.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING);
-            startX = -totalWidth / 2;
-          }
-        } else {
-          const maxOccupiedX = Math.max(...allPositionedX);
-          startX = maxOccupiedX + (NODE_WIDTH / 2) + HORIZONTAL_SPACING + CHILDLESS_NODE_OFFSET + (NODE_WIDTH / 2);
-        }
-        
-        nodesWithoutChildren.forEach((nodeData, index) => {
-          const x = startX + (index * (NODE_WIDTH + HORIZONTAL_SPACING));
-          nodeData.position = { x, y };
-          console.log(`📍 Childless node ${nodeData.id}: (${x}, ${y})`);
-        });
-      }
-    }
+    console.log(`🔄 Level ${level}: ${levelNodes.length} nodes`);
+    
+    // Simple horizontal positioning (will be reorganized by sibling sorting)
+    const totalWidth = (levelNodes.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING);
+    let startX = -totalWidth / 2;
+    
+    levelNodes.forEach((nodeData, index) => {
+      const x = startX + (index * (NODE_WIDTH + HORIZONTAL_SPACING));
+      nodeData.position = { x, y };
+      console.log(`📍 Node ${nodeData.id}: (${x}, ${y})`);
+    });
   }
   
   // Convert to React Flow format
@@ -803,8 +906,6 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
     nodes.push(node);
   });
   
-  console.log(`✅ CONSECUTIVE SIBLINGS layout completed: ${nodes.length} nodes with proper consecutive positioning`);
-  
   const nodeTypes = {
     businessTool: nodes.filter(n => n.data.nodeType === 'businessTool').length,
     businessECP: nodes.filter(n => n.data.nodeType === 'businessECP').length,
@@ -815,7 +916,10 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
     other: nodes.filter(n => !['businessTool', 'businessECP', 'condition', 'event', 'policy', 'jsonCode'].includes(n.data.nodeType)).length
   };
   
-  return {
+  // **APPLY SIBLING SORTING LAYER**
+  console.log(`\n🚀 APPLYING SIBLING SORTING POST-PROCESSING...`);
+  
+  const initialGraphData = {
     nodes,
     edges,
     metadata: {
@@ -826,27 +930,35 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
       nodeTypes: nodeTypes,
       layout: {
         ...config,
-        type: 'consecutiveSiblingsLayout',
-        algorithm: 'consecutive-siblings-positioning',
-        groupSeparation: HORIZONTAL_SPACING * 2,
-        childSpacing: HORIZONTAL_SPACING
+        type: 'consecutiveSiblingsWithSorting',
+        algorithm: 'post-processing-sibling-grouping'
       }
     }
   };
+  
+  const finalGraphData = applySiblingSortingLayer(initialGraphData, {
+    NODE_WIDTH: config.NODE_WIDTH || 200,
+    NODE_HEIGHT: config.NODE_HEIGHT || 150,
+    HORIZONTAL_SPACING: config.HORIZONTAL_SPACING || 50,
+    VERTICAL_SPACING: config.VERTICAL_SPACING || 200,
+    GROUP_SEPARATION: 150 // Moderate gap between parent groups
+  });
+  
+  return finalGraphData;
 }
 
 // ===== API ROUTES =====
 
 app.get('/', (req, res) => {
   res.json({
-    message: 'Notion Graph Service - COMPLETELY FIXED Children Grouping',
+    message: 'Notion Graph Service - Sibling Sorting Applied',
     status: 'running',
     timestamp: new Date().toISOString(),
     firebase: isFirebaseEnabled ? 'enabled' : 'disabled',
     notion: NOTION_TOKEN ? 'configured' : 'missing',
     supportedTypes: ['Business ECP', 'Business Tool', 'Conditions', 'Policies', 'Events', 'JSON Code'],
     layoutConfig: LAYOUT_CONFIG,
-    layoutAlgorithm: 'bottom-up-consecutive-children-grouping',
+    layoutAlgorithm: 'sibling-sorting-post-processing',
     endpoints: [
       'GET /health',
       'POST /api/create-graph',
@@ -869,7 +981,7 @@ app.get('/health', (req, res) => {
     memoryGraphs: graphStorage.size,
     supportedGraphTypes: ['businessECP', 'businessTool'],
     layoutConfig: LAYOUT_CONFIG,
-    layoutAlgorithm: 'completely-fixed-consecutive-grouping'
+    layoutAlgorithm: 'sibling-sorting-post-processing'
   });
 });
 
@@ -890,7 +1002,7 @@ app.post('/api/update-layout-config', (req, res) => {
       success: true,
       message: 'Layout configuration updated successfully',
       currentConfig: LAYOUT_CONFIG,
-      algorithm: 'completely-fixed-consecutive-grouping'
+      algorithm: 'sibling-sorting-post-processing'
     });
   } catch (error) {
     res.status(500).json({
@@ -904,7 +1016,7 @@ app.get('/api/layout-config', (req, res) => {
   res.json({
     success: true,
     config: LAYOUT_CONFIG,
-    algorithm: 'completely-fixed-consecutive-grouping'
+    algorithm: 'sibling-sorting-post-processing'
   });
 });
 
@@ -952,13 +1064,13 @@ app.post('/api/create-graph', async (req, res) => {
       });
     }
 
-    console.log(`🏢 Creating FIXED Business ECP graph for page ${pageId} with text "${text}"`);
+    console.log(`🏢 Creating Business ECP graph with sibling sorting for page ${pageId} with text "${text}"`);
 
     const toggleStructure = await fetchToggleBlockStructure({ pageId, text });
     console.log(`✅ Toggle structure extracted in ${Date.now() - startTime}ms`);
     
     const graphData = transformToggleToReactFlow(toggleStructure.result, layoutConfig);
-    console.log(`✅ Graph transformed with FIXED grouping: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges`);
+    console.log(`✅ Graph transformed with sibling sorting: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges`);
     
     const cleanedGraphData = sanitizeGraphData(graphData);
 
@@ -986,10 +1098,11 @@ app.post('/api/create-graph', async (req, res) => {
           storage: isFirebaseEnabled ? 'firebase' : 'memory',
           processingTimeMs: Date.now() - startTime,
           layoutConfig: cleanedGraphData.metadata.layout,
-          algorithm: 'completely-fixed-consecutive-grouping'
+          algorithm: 'sibling-sorting-post-processing',
+          siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied
         },
         notionResult: appendResult,
-        message: `✅ Business ECP graph created with COMPLETELY FIXED children grouping! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'}`
+        message: `✅ Business ECP graph created with sibling sorting! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'}`
       });
       
     } catch (notionError) {
@@ -1007,10 +1120,11 @@ app.post('/api/create-graph', async (req, res) => {
           storage: isFirebaseEnabled ? 'firebase' : 'memory',
           processingTimeMs: Date.now() - startTime,
           layoutConfig: cleanedGraphData.metadata.layout,
-          algorithm: 'completely-fixed-consecutive-grouping'
+          algorithm: 'sibling-sorting-post-processing',
+          siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied
         },
         warning: `Graph created but failed to add to Notion page: ${notionError.message}`,
-        message: `⚠️ Business ECP graph created with FIXED grouping but couldn't add to Notion page.`
+        message: `⚠️ Business ECP graph created with sibling sorting but couldn't add to Notion page.`
       });
     }
 
@@ -1051,13 +1165,13 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
       });
     }
 
-    console.log(`🛠️ Creating FIXED Business Tool graph for page ${pageId} with text "${text}"`);
+    console.log(`🛠️ Creating Business Tool graph with sibling sorting for page ${pageId} with text "${text}"`);
 
     const toggleStructure = await fetchToggleBlockStructure({ pageId, text });
     console.log(`✅ Toggle structure extracted in ${Date.now() - startTime}ms`);
     
     const graphData = transformToggleToReactFlow(toggleStructure.result, layoutConfig);
-    console.log(`✅ Graph transformed with FIXED grouping: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges`);
+    console.log(`✅ Graph transformed with sibling sorting: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges`);
     
     const cleanedGraphData = sanitizeGraphData(graphData);
 
@@ -1085,10 +1199,11 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
           storage: isFirebaseEnabled ? 'firebase' : 'memory',
           processingTimeMs: Date.now() - startTime,
           layoutConfig: cleanedGraphData.metadata.layout,
-          algorithm: 'completely-fixed-consecutive-grouping'
+          algorithm: 'sibling-sorting-post-processing',
+          siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied
         },
         notionResult: appendResult,
-        message: `✅ Business Tool graph created with COMPLETELY FIXED children grouping! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'}`
+        message: `✅ Business Tool graph created with sibling sorting! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'}`
       });
       
     } catch (notionError) {
@@ -1106,10 +1221,11 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
           storage: isFirebaseEnabled ? 'firebase' : 'memory',
           processingTimeMs: Date.now() - startTime,
           layoutConfig: cleanedGraphData.metadata.layout,
-          algorithm: 'completely-fixed-consecutive-grouping'
+          algorithm: 'sibling-sorting-post-processing',
+          siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied
         },
         warning: `Graph created but failed to add to Notion page: ${notionError.message}`,
-        message: `⚠️ Business Tool graph created with FIXED grouping but couldn't add to Notion page.`
+        message: `⚠️ Business Tool graph created with sibling sorting but couldn't add to Notion page.`
       });
     }
 
@@ -1142,7 +1258,7 @@ app.post('/api/quick-test', async (req, res) => {
     const testPageId = '2117432eb8438055a473fc7198dc3fdc';
     const testText = 'Business Tool';
     
-    console.log('🧪 Running quick test with COMPLETELY FIXED Business Tool layout...');
+    console.log('🧪 Running quick test with sibling sorting...');
     
     const createResponse = await fetch(`${req.protocol}://${req.get('host')}/api/create-business-tool-graph`, {
       method: 'POST',
@@ -1158,7 +1274,7 @@ app.post('/api/quick-test', async (req, res) => {
       testType: 'businessTool',
       platform: 'vercel',
       firebase: isFirebaseEnabled ? 'enabled' : 'memory-fallback',
-      algorithm: 'completely-fixed-consecutive-grouping'
+      algorithm: 'sibling-sorting-post-processing'
     });
 
   } catch (error) {
@@ -1297,7 +1413,7 @@ app.post('/api/graph-structure', async (req, res) => {
     res.json({
       results: nodes,
       resultsJson: JSON.stringify(nodes, null, 2),
-      algorithm: 'completely-fixed-consecutive-grouping'
+      algorithm: 'sibling-sorting-post-processing'
     });
 
   } catch (error) {
@@ -1327,8 +1443,8 @@ if (require.main === module) {
     console.log(`🏢 Business ECP support: Enabled`);
     console.log(`🛠️ Business Tool support: Enabled`);
     console.log(`📊 Graph structure extraction: Enabled`);
-    console.log(`🎯 COMPLETELY FIXED consecutive children grouping: Active`);
+    console.log(`🎯 Sibling sorting post-processing: Active`);
     console.log(`📐 Default layout config:`, LAYOUT_CONFIG);
-    console.log(`🔧 Algorithm: completely-fixed-consecutive-grouping`);
+    console.log(`🔧 Algorithm: sibling-sorting-post-processing`);
   });
 }
