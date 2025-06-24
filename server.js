@@ -530,15 +530,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
   }
   
   function getNodeIcon(nodeType) {
-    switch (nodeType) {
-      case 'businessECP': return '🏢';
-      case 'businessTool': return '🛠️';
-      case 'condition': return '❓';
-      case 'policy': return '📋';
-      case 'event': return '📅';
-      case 'jsonCode': return '💻';
-      default: return '';
-    }
+   
   }
   
   function createNode(block, parentId = null, level = 0) {
