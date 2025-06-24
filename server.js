@@ -441,8 +441,8 @@ function transformToggleToReactFlow(toggleStructureJson) {
   // ===== CONFIGURABLE LAYOUT VARIABLES =====
   const NODE_WIDTH = 200;           // Fixed width for all nodes (px)
   const NODE_HEIGHT = 150;          // Fixed height for all nodes (px)
-  const HORIZONTAL_SPACING = 100;    // Fixed horizontal distance between nodes at same level (px)
-  const VERTICAL_SPACING = 200;     // Fixed vertical distance between levels (px)
+  const HORIZONTAL_SPACING = 30;    // Fixed horizontal distance between nodes at same level (px)
+  const VERTICAL_SPACING = 100;     // Fixed vertical distance between levels (px)
   
   const toggleStructure = JSON.parse(toggleStructureJson);
   const nodes = [];
@@ -671,48 +671,58 @@ function transformToggleToReactFlow(toggleStructureJson) {
     
     console.log(`🔼 Processing level ${level} with ${levelNodes.length} nodes`);
     
-    levelNodes.forEach(nodeData => {
+    // First, position all nodes with children (center them over their children)
+    const nodesWithChildren = levelNodes.filter(node => nodeRelationships.has(node.id) && nodeRelationships.get(node.id).length > 0);
+    const nodesWithoutChildren = levelNodes.filter(node => !nodeRelationships.has(node.id) || nodeRelationships.get(node.id).length === 0);
+    
+    // Position nodes with children - center them over their children
+    nodesWithChildren.forEach(nodeData => {
       const children = nodeRelationships.get(nodeData.id) || [];
+      const childPositions = children.map(childId => {
+        const childNode = allNodes.get(childId);
+        return childNode.position.x;
+      });
       
-      if (children.length === 0) {
-        // No children, position with fixed spacing relative to siblings
-        // This will be handled after we position nodes with children
-        nodeData.position = { x: 0, y }; // Temporary position
-      } else {
-        // Has children - center over them
-        const childPositions = children.map(childId => {
-          const childNode = allNodes.get(childId);
-          return childNode.position.x;
-        });
-        
-        const leftmostChildX = Math.min(...childPositions);
-        const rightmostChildX = Math.max(...childPositions);
-        const centerX = (leftmostChildX + rightmostChildX) / 2;
-        
-        nodeData.position = { x: centerX, y };
-        console.log(`📍 Parent node ${nodeData.id} centered at (${centerX}, ${y}) over children [${leftmostChildX}, ${rightmostChildX}]`);
-      }
+      const leftmostChildX = Math.min(...childPositions);
+      const rightmostChildX = Math.max(...childPositions);
+      const centerX = (leftmostChildX + rightmostChildX) / 2;
+      
+      nodeData.position = { x: centerX, y };
+      console.log(`📍 Parent node ${nodeData.id} centered at (${centerX}, ${y}) over children [${leftmostChildX}, ${rightmostChildX}]`);
     });
     
-    // Now handle nodes without children - maintain fixed spacing
-    const nodesWithoutChildren = levelNodes.filter(node => !nodeRelationships.has(node.id) || nodeRelationships.get(node.id).length === 0);
-    const nodesWithChildren = levelNodes.filter(node => nodeRelationships.has(node.id) && nodeRelationships.get(node.id).length > 0);
-    
+    // Handle nodes without children
     if (nodesWithoutChildren.length > 0) {
-      // Sort nodes without children and position them with fixed spacing
-      // Position them to avoid conflicts with nodes that have children
-      const occupiedXPositions = nodesWithChildren.map(node => node.position.x);
-      
-      // Find available space for nodes without children
-      let availableX = occupiedXPositions.length > 0 ? 
-        Math.max(...occupiedXPositions) + (NODE_WIDTH / 2) + HORIZONTAL_SPACING + (NODE_WIDTH / 2) : 
-        -(nodesWithoutChildren.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING) / 2;
-      
-      nodesWithoutChildren.forEach((nodeData, index) => {
-        const x = availableX + (index * (NODE_WIDTH + HORIZONTAL_SPACING));
-        nodeData.position = { x, y };
-        console.log(`📍 Childless node ${nodeData.id}: (${x}, ${y})`);
-      });
+      if (level === maxLevel) {
+        // Bottom level: already positioned with fixed spacing above
+        // Do nothing - they're already positioned
+      } else {
+        // Upper levels: Position childless nodes to avoid conflicts but don't use fixed spacing
+        // Try to fit them in available space or position them adjacent to existing nodes
+        const occupiedXPositions = nodesWithChildren.map(node => node.position.x);
+        
+        if (occupiedXPositions.length === 0) {
+          // No nodes with children at this level, center the childless nodes with fixed spacing
+          const totalWidth = (nodesWithoutChildren.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING);
+          const startX = -totalWidth / 2;
+          
+          nodesWithoutChildren.forEach((nodeData, index) => {
+            const x = startX + (index * (NODE_WIDTH + HORIZONTAL_SPACING));
+            nodeData.position = { x, y };
+            console.log(`📍 Childless node ${nodeData.id} (level ${level}): (${x}, ${y})`);
+          });
+        } else {
+          // Position childless nodes to the right of nodes with children to avoid conflicts
+          const maxOccupiedX = Math.max(...occupiedXPositions);
+          let availableX = maxOccupiedX + (NODE_WIDTH / 2) + HORIZONTAL_SPACING + (NODE_WIDTH / 2);
+          
+          nodesWithoutChildren.forEach((nodeData, index) => {
+            const x = availableX + (index * (NODE_WIDTH + HORIZONTAL_SPACING));
+            nodeData.position = { x, y };
+            console.log(`📍 Childless node ${nodeData.id} (level ${level}): (${x}, ${y})`);
+          });
+        }
+      }
     }
   }
   
