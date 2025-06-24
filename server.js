@@ -455,7 +455,8 @@ async function simplifyBlockForVercel(block, headers, depth) {
   return simplified;
 }
 
-// ===== CORRECTED BOTTOM-UP LAYOUT TRANSFORMATION =====
+// Replace the transformToggleToReactFlow function in your server.js with this FIXED version
+
 function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
   // Merge custom configuration with defaults
   const config = { ...LAYOUT_CONFIG, ...customConfig };
@@ -470,7 +471,7 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
     PRESERVE_HIERARCHY
   } = config;
 
-  console.log(`🔧 Using CORRECTED layout configuration:`, config);
+  console.log(`🔧 Using FIXED grouping layout configuration:`, config);
   
   const toggleStructure = JSON.parse(toggleStructureJson);
   const nodes = [];
@@ -482,7 +483,7 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
   const allNodes = new Map(); // nodeId -> nodeData
   const nodesByLevel = new Map(); // level -> [nodeData]
   
-  // Helper functions for node type detection
+  // Helper functions for node type detection (keeping existing ones)
   function isBusinessECP(content) {
     return content.includes('Business ECP:');
   }
@@ -507,7 +508,7 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
     return /←\s*JSON\s*Code/.test(content);
   }
   
-  // Extract clean title (matching frontend logic)
+  // Extract clean title (keeping existing implementation)
   function extractTitle(content, type) {
     let title = content;
     
@@ -581,7 +582,7 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
     
     console.log(`🔍 Processing block at level ${level}: "${content.substring(0, 100)}..."`);
     
-    // Determine node type - Business ECP FIRST (matching frontend)
+    // Determine node type
     if (level === 0 && isBusinessECP(content)) {
       nodeType = 'businessECP';
     } else if (level === 0 && isBusinessTool(content)) {
@@ -667,19 +668,19 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
     return nodeId;
   }
   
-  console.log(`🚀 Starting CORRECTED bottom-up transformation...`);
+  console.log(`🚀 Starting FIXED bottom-up transformation with proper grouping...`);
   
   // First pass: Create all nodes and relationships
   createNode(toggleStructure.toggleBlock);
   
   console.log(`📊 Created ${allNodes.size} nodes and ${edges.length} edges`);
   
-  // ===== CORRECTED BOTTOM-UP LAYOUT CALCULATION =====
+  // ===== FIXED BOTTOM-UP LAYOUT CALCULATION WITH PROPER GROUPING =====
   
   const maxLevel = Math.max(...nodesByLevel.keys());
-  console.log(`📏 Processing ${maxLevel + 1} levels for CORRECTED bottom-up layout`);
+  console.log(`📏 Processing ${maxLevel + 1} levels for FIXED bottom-up layout`);
   
-  // Step 1: CORRECTED bottom level positioning - GROUP BY PARENT
+  // Step 1: FIXED bottom level positioning - PROPERLY GROUP BY PARENT
   const bottomLevel = maxLevel;
   const bottomNodes = nodesByLevel.get(bottomLevel) || [];
   
@@ -705,63 +706,51 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
     
     console.log(`📊 Bottom level grouping: ${nodesByParent.size} parent groups, ${orphanNodes.length} orphan nodes`);
     
-    // Calculate positions for each parent group
+    // ===== THIS IS THE FIX: PROPER CONSECUTIVE POSITIONING =====
+    
+    // Calculate positions for each parent group - CHILDREN MUST BE CONSECUTIVE
     const parentGroups = Array.from(nodesByParent.entries());
-    const GROUP_SPACING = HORIZONTAL_SPACING * 2; // Larger spacing between parent groups
+    const GROUP_GAP = HORIZONTAL_SPACING * 3; // Gap between different parent groups
     
-    // Calculate total width needed for all groups
-    let totalGroupsWidth = 0;
-    const groupWidths = [];
+    // Position each group consecutively
+    let currentX = 0; // Start from center
     
+    // Calculate total width first to center everything
+    let totalWidth = 0;
     parentGroups.forEach(([parentId, children]) => {
-      const groupWidth = children.length === 1 ? 0 : (children.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING);
-      groupWidths.push(groupWidth);
-      totalGroupsWidth += groupWidth;
+      const groupWidth = children.length === 1 ? NODE_WIDTH : 
+                         ((children.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING)) + NODE_WIDTH;
+      totalWidth += groupWidth;
     });
     
-    // Add spacing between groups
+    // Add gaps between groups
     if (parentGroups.length > 1) {
-      totalGroupsWidth += (parentGroups.length - 1) * GROUP_SPACING;
+      totalWidth += (parentGroups.length - 1) * GROUP_GAP;
     }
     
-    // Position each parent group
-    let currentX = -totalGroupsWidth / 2;
+    // Start positioning from the left edge
+    currentX = -totalWidth / 2;
     
     parentGroups.forEach(([parentId, children], groupIndex) => {
-      const groupWidth = groupWidths[groupIndex];
-      const groupStartX = currentX;
+      console.log(`📍 FIXED positioning group for parent ${parentId}: ${children.length} children`);
       
-      console.log(`📍 Positioning group for parent ${parentId}: ${children.length} children, width: ${groupWidth}`);
+      // Position this parent's children CONSECUTIVELY
+      children.forEach((child, childIndex) => {
+        const childX = currentX + (childIndex * (NODE_WIDTH + HORIZONTAL_SPACING));
+        child.position = { x: childX, y: bottomY };
+        console.log(`📍 GROUPED child ${child.id}: (${childX}, ${bottomY}) [parent: ${parentId}, consecutive index: ${childIndex}]`);
+      });
       
-      if (children.length === 1) {
-        // Single child - position at group center
-        const childX = groupStartX;
-        children[0].position = { x: childX, y: bottomY };
-        console.log(`📍 Single child ${children[0].id}: (${childX}, ${bottomY}) [parent: ${parentId}]`);
-      } else {
-        // Multiple children - distribute with equal spacing
-        children.forEach((child, childIndex) => {
-          const childX = groupStartX + (childIndex * (NODE_WIDTH + HORIZONTAL_SPACING));
-          child.position = { x: childX, y: bottomY };
-          console.log(`📍 Child ${child.id}: (${childX}, ${bottomY}) [parent: ${parentId}, index: ${childIndex}]`);
-        });
-      }
-      
-      // Move to next group position
-      currentX += groupWidth + GROUP_SPACING;
+      // Move to next group position (add group width + gap)
+      const groupWidth = children.length === 1 ? NODE_WIDTH : 
+                         ((children.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING)) + NODE_WIDTH;
+      currentX += groupWidth + GROUP_GAP;
     });
     
     // Position orphan nodes (nodes without parents) at the end
     if (orphanNodes.length > 0) {
-      let orphanStartX = currentX;
-      if (parentGroups.length === 0) {
-        // Only orphan nodes, center them
-        const orphanWidth = orphanNodes.length === 1 ? 0 : (orphanNodes.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING);
-        orphanStartX = -orphanWidth / 2;
-      }
-      
       orphanNodes.forEach((node, index) => {
-        const x = orphanStartX + (index * (NODE_WIDTH + HORIZONTAL_SPACING));
+        const x = currentX + (index * (NODE_WIDTH + HORIZONTAL_SPACING));
         node.position = { x, y: bottomY };
         console.log(`📍 Orphan node ${node.id}: (${x}, ${bottomY})`);
       });
@@ -794,13 +783,13 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
       });
       
       if (childPositions.length > 0) {
-        // Calculate center of THIS parent's children (now properly grouped)
+        // Calculate center of THIS parent's children (now properly grouped together)
         const leftmostChildX = Math.min(...childPositions);
         const rightmostChildX = Math.max(...childPositions);
         const centerX = (leftmostChildX + rightmostChildX) / 2;
         
         nodeData.position = { x: centerX, y };
-        console.log(`📍 Parent node ${nodeData.id} CORRECTLY centered at (${centerX}, ${y}) over its grouped children [${leftmostChildX}, ${rightmostChildX}]`);
+        console.log(`📍 Parent node ${nodeData.id} PROPERLY centered at (${centerX}, ${y}) over its GROUPED children [${leftmostChildX}, ${rightmostChildX}]`);
       }
     });
     
@@ -858,7 +847,7 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
     nodes.push(node);
   });
   
-  console.log(`✅ CORRECTED bottom-up layout completed: ${nodes.length} nodes positioned with proper parent-child grouping`);
+  console.log(`✅ FIXED bottom-up layout completed: ${nodes.length} nodes positioned with PROPER parent-child grouping`);
   
   // Count node types for metadata
   const nodeTypes = {
@@ -884,9 +873,9 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
       nodeTypes: nodeTypes,
       layout: {
         ...config,
-        type: 'correctedBottomUpGrouped',
-        algorithm: 'bottom-up-grouped-by-parent',
-        groupSpacing: HORIZONTAL_SPACING * 2,
+        type: 'fixedBottomUpGrouped',
+        algorithm: 'bottom-up-properly-grouped-by-parent',
+        groupGap: HORIZONTAL_SPACING * 3,
         childSpacing: HORIZONTAL_SPACING
       }
     }
