@@ -69,6 +69,25 @@ const notion = new Client({
 
 const graphStorage = new Map();
 
+// ===== ENHANCED LAYOUT CONFIGURATION =====
+const LAYOUT_CONFIG = {
+  NODE_WIDTH: 200,           // Fixed width for all nodes (px)
+  NODE_HEIGHT: 150,          // Fixed height for all nodes (px)
+  HORIZONTAL_SPACING: 120,   // Distance between nodes at same level (px) - EASILY CONFIGURABLE
+  VERTICAL_SPACING: 200,     // Distance between levels (px)
+  
+  // Advanced options
+  CHILDLESS_NODE_OFFSET: 50, // Extra spacing before childless nodes
+  CENTER_SINGLE_NODES: true, // Whether to center single nodes
+  PRESERVE_HIERARCHY: true   // Whether to strictly maintain parent-child centering
+};
+
+// Function to update layout configuration
+function updateLayoutConfig(newConfig) {
+  Object.assign(LAYOUT_CONFIG, newConfig);
+  console.log('📐 Layout configuration updated:', LAYOUT_CONFIG);
+}
+
 // ===== FIREBASE FUNCTIONS =====
 
 async function saveGraphToFirestore(pageId, graphData) {
@@ -436,22 +455,32 @@ async function simplifyBlockForVercel(block, headers, depth) {
   return simplified;
 }
 
-// ===== TRANSFORMATION WITH BOTTOM-UP LAYOUT AND FIXED SPACING =====
-function transformToggleToReactFlow(toggleStructureJson) {
-  // ===== CONFIGURABLE LAYOUT VARIABLES =====
-  const NODE_WIDTH = 200;           // Fixed width for all nodes (px)
-  const NODE_HEIGHT = 150;          // Fixed height for all nodes (px)
-  const HORIZONTAL_SPACING = 100;    // Fixed horizontal distance between nodes at same level (px)
-  const VERTICAL_SPACING = 200;     // Fixed vertical distance between levels (px)
+// ===== ENHANCED BOTTOM-UP LAYOUT TRANSFORMATION =====
+function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
+  // Merge custom configuration with defaults
+  const config = { ...LAYOUT_CONFIG, ...customConfig };
+  
+  const {
+    NODE_WIDTH,
+    NODE_HEIGHT,
+    HORIZONTAL_SPACING,
+    VERTICAL_SPACING,
+    CHILDLESS_NODE_OFFSET,
+    CENTER_SINGLE_NODES,
+    PRESERVE_HIERARCHY
+  } = config;
+
+  console.log(`🔧 Using layout configuration:`, config);
   
   const toggleStructure = JSON.parse(toggleStructureJson);
   const nodes = [];
   const edges = [];
   let nodeIdCounter = 1;
 
-  // Store relationships for bottom-up layout calculation
+  // Store relationships and node data
   const nodeRelationships = new Map(); // parentId -> [childIds]
   const allNodes = new Map(); // nodeId -> nodeData
+  const nodesByLevel = new Map(); // level -> [nodeData]
   
   // Helper functions for node type detection
   function isBusinessECP(content) {
@@ -591,11 +620,18 @@ function transformToggleToReactFlow(toggleStructureJson) {
       depth: level,
       parentId: parentId,
       width: NODE_WIDTH,
-      height: NODE_HEIGHT
+      height: NODE_HEIGHT,
+      hasChildren: false // Will be updated later
     };
     
-    // Store in allNodes map for later processing
+    // Store in maps
     allNodes.set(nodeId, nodeData);
+    
+    // Group by level
+    if (!nodesByLevel.has(level)) {
+      nodesByLevel.set(level, []);
+    }
+    nodesByLevel.get(level).push(nodeData);
     
     // Track parent-child relationships
     if (parentId) {
@@ -603,6 +639,12 @@ function transformToggleToReactFlow(toggleStructureJson) {
         nodeRelationships.set(parentId, []);
       }
       nodeRelationships.get(parentId).push(nodeId);
+      
+      // Mark parent as having children
+      const parentNode = allNodes.get(parentId);
+      if (parentNode) {
+        parentNode.hasChildren = true;
+      }
       
       // Create edge
       edges.push({
@@ -625,44 +667,43 @@ function transformToggleToReactFlow(toggleStructureJson) {
     return nodeId;
   }
   
-  console.log(`🚀 Starting transformation of toggle structure...`);
+  console.log(`🚀 Starting enhanced bottom-up transformation...`);
   
   // First pass: Create all nodes and relationships
   createNode(toggleStructure.toggleBlock);
   
   console.log(`📊 Created ${allNodes.size} nodes and ${edges.length} edges`);
   
-  // ===== BOTTOM-UP LAYOUT CALCULATION =====
-  
-  // Group nodes by depth level
-  const nodesByLevel = new Map();
-  allNodes.forEach((nodeData, nodeId) => {
-    const level = nodeData.depth;
-    if (!nodesByLevel.has(level)) {
-      nodesByLevel.set(level, []);
-    }
-    nodesByLevel.get(level).push(nodeData);
-  });
+  // ===== ENHANCED BOTTOM-UP LAYOUT CALCULATION =====
   
   const maxLevel = Math.max(...nodesByLevel.keys());
-  console.log(`📏 Processing ${maxLevel + 1} levels for bottom-up layout`);
+  console.log(`📏 Processing ${maxLevel + 1} levels for enhanced bottom-up layout`);
   
-  // Step 1: Position bottom level (highest depth) with fixed spacing
+  // Step 1: Position bottom level (leaf nodes) with equal spacing
   const bottomLevel = maxLevel;
   const bottomNodes = nodesByLevel.get(bottomLevel) || [];
   
   console.log(`🔽 Positioning bottom level (${bottomLevel}) with ${bottomNodes.length} nodes`);
   
-  // Calculate positions for bottom level with fixed HORIZONTAL_SPACING
-  const bottomY = bottomLevel * VERTICAL_SPACING;
-  const totalBottomWidth = (bottomNodes.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING);
-  const startX = -totalBottomWidth / 2;
-  
-  bottomNodes.forEach((nodeData, index) => {
-    const x = startX + (index * (NODE_WIDTH + HORIZONTAL_SPACING));
-    nodeData.position = { x, y: bottomY };
-    console.log(`📍 Bottom node ${nodeData.id}: (${x}, ${bottomY})`);
-  });
+  if (bottomNodes.length > 0) {
+    const bottomY = bottomLevel * VERTICAL_SPACING;
+    
+    if (bottomNodes.length === 1 && CENTER_SINGLE_NODES) {
+      // Single node at center
+      bottomNodes[0].position = { x: 0, y: bottomY };
+      console.log(`📍 Single bottom node centered: (0, ${bottomY})`);
+    } else {
+      // Multiple nodes with configurable equal spacing
+      const totalBottomWidth = (bottomNodes.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING);
+      const startX = -totalBottomWidth / 2;
+      
+      bottomNodes.forEach((nodeData, index) => {
+        const x = startX + (index * (NODE_WIDTH + HORIZONTAL_SPACING));
+        nodeData.position = { x, y: bottomY };
+        console.log(`📍 Bottom node ${nodeData.id}: (${x}, ${bottomY}) [spacing: ${HORIZONTAL_SPACING}px]`);
+      });
+    }
+  }
   
   // Step 2: Position upper levels bottom-up, centering parents over their children
   for (let level = maxLevel - 1; level >= 0; level--) {
@@ -671,11 +712,17 @@ function transformToggleToReactFlow(toggleStructureJson) {
     
     console.log(`🔼 Processing level ${level} with ${levelNodes.length} nodes`);
     
-    // First, position all nodes with children (center them over their children)
-    const nodesWithChildren = levelNodes.filter(node => nodeRelationships.has(node.id) && nodeRelationships.get(node.id).length > 0);
-    const nodesWithoutChildren = levelNodes.filter(node => !nodeRelationships.has(node.id) || nodeRelationships.get(node.id).length === 0);
+    // Separate nodes with children from nodes without children
+    const nodesWithChildren = levelNodes.filter(node => 
+      nodeRelationships.has(node.id) && nodeRelationships.get(node.id).length > 0
+    );
+    const nodesWithoutChildren = levelNodes.filter(node => 
+      !nodeRelationships.has(node.id) || nodeRelationships.get(node.id).length === 0
+    );
     
-    // Position nodes with children - center them over their children
+    console.log(`📊 Level ${level}: ${nodesWithChildren.length} with children, ${nodesWithoutChildren.length} without children`);
+    
+    // Position nodes with children first - center them over their children
     nodesWithChildren.forEach(nodeData => {
       const children = nodeRelationships.get(nodeData.id) || [];
       const childPositions = children.map(childId => {
@@ -683,46 +730,41 @@ function transformToggleToReactFlow(toggleStructureJson) {
         return childNode.position.x;
       });
       
-      const leftmostChildX = Math.min(...childPositions);
-      const rightmostChildX = Math.max(...childPositions);
-      const centerX = (leftmostChildX + rightmostChildX) / 2;
-      
-      nodeData.position = { x: centerX, y };
-      console.log(`📍 Parent node ${nodeData.id} centered at (${centerX}, ${y}) over children [${leftmostChildX}, ${rightmostChildX}]`);
+      if (childPositions.length > 0) {
+        const leftmostChildX = Math.min(...childPositions);
+        const rightmostChildX = Math.max(...childPositions);
+        const centerX = (leftmostChildX + rightmostChildX) / 2;
+        
+        nodeData.position = { x: centerX, y };
+        console.log(`📍 Parent node ${nodeData.id} centered at (${centerX}, ${y}) over children [${leftmostChildX}, ${rightmostChildX}]`);
+      }
     });
     
-    // Handle nodes without children
+    // Position nodes without children to the right
     if (nodesWithoutChildren.length > 0) {
-      if (level === maxLevel) {
-        // Bottom level: already positioned with fixed spacing above
-        // Do nothing - they're already positioned
-      } else {
-        // Upper levels: Position childless nodes to avoid conflicts but don't use fixed spacing
-        // Try to fit them in available space or position them adjacent to existing nodes
-        const occupiedXPositions = nodesWithChildren.map(node => node.position.x);
-        
-        if (occupiedXPositions.length === 0) {
-          // No nodes with children at this level, center the childless nodes with fixed spacing
-          const totalWidth = (nodesWithoutChildren.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING);
-          const startX = -totalWidth / 2;
-          
-          nodesWithoutChildren.forEach((nodeData, index) => {
-            const x = startX + (index * (NODE_WIDTH + HORIZONTAL_SPACING));
-            nodeData.position = { x, y };
-            console.log(`📍 Childless node ${nodeData.id} (level ${level}): (${x}, ${y})`);
-          });
+      // Find the rightmost position of nodes with children at this level
+      const nodesWithChildrenPositions = nodesWithChildren.map(node => node.position.x);
+      let startX;
+      
+      if (nodesWithChildrenPositions.length === 0) {
+        // No nodes with children at this level, center the childless nodes
+        if (nodesWithoutChildren.length === 1 && CENTER_SINGLE_NODES) {
+          startX = 0;
         } else {
-          // Position childless nodes to the right of nodes with children to avoid conflicts
-          const maxOccupiedX = Math.max(...occupiedXPositions);
-          let availableX = maxOccupiedX + (NODE_WIDTH / 2) + HORIZONTAL_SPACING + (NODE_WIDTH / 2);
-          
-          nodesWithoutChildren.forEach((nodeData, index) => {
-            const x = availableX + (index * (NODE_WIDTH + HORIZONTAL_SPACING));
-            nodeData.position = { x, y };
-            console.log(`📍 Childless node ${nodeData.id} (level ${level}): (${x}, ${y})`);
-          });
+          const totalWidth = (nodesWithoutChildren.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING);
+          startX = -totalWidth / 2;
         }
+      } else {
+        // Position childless nodes to the right of nodes with children
+        const maxOccupiedX = Math.max(...nodesWithChildrenPositions);
+        startX = maxOccupiedX + (NODE_WIDTH / 2) + HORIZONTAL_SPACING + CHILDLESS_NODE_OFFSET + (NODE_WIDTH / 2);
       }
+      
+      nodesWithoutChildren.forEach((nodeData, index) => {
+        const x = startX + (index * (NODE_WIDTH + HORIZONTAL_SPACING));
+        nodeData.position = { x, y };
+        console.log(`📍 Childless node ${nodeData.id} (level ${level}): (${x}, ${y}) [spacing: ${HORIZONTAL_SPACING}px]`);
+      });
     }
   }
   
@@ -739,7 +781,8 @@ function transformToggleToReactFlow(toggleStructureJson) {
         nodeType: nodeData.nodeType,
         depth: nodeData.depth,
         width: NODE_WIDTH,
-        height: NODE_HEIGHT
+        height: NODE_HEIGHT,
+        hasChildren: nodeData.hasChildren
       },
       type: 'custom',
       style: {
@@ -751,7 +794,7 @@ function transformToggleToReactFlow(toggleStructureJson) {
     nodes.push(node);
   });
   
-  console.log(`✅ Bottom-up layout completed: ${nodes.length} nodes positioned`);
+  console.log(`✅ Enhanced bottom-up layout completed: ${nodes.length} nodes positioned`);
   
   // Count node types for metadata
   const nodeTypes = {
@@ -776,11 +819,9 @@ function transformToggleToReactFlow(toggleStructureJson) {
       sourceMetadata: toggleStructure.metadata,
       nodeTypes: nodeTypes,
       layout: {
-        nodeWidth: NODE_WIDTH,
-        nodeHeight: NODE_HEIGHT,
-        horizontalSpacing: HORIZONTAL_SPACING,
-        verticalSpacing: VERTICAL_SPACING,
-        type: 'bottomUpCentered'
+        ...config,
+        type: 'enhancedBottomUpCentered',
+        algorithm: 'bottom-up-equal-spacing-configurable'
       }
     }
   };
@@ -790,17 +831,20 @@ function transformToggleToReactFlow(toggleStructureJson) {
 
 app.get('/', (req, res) => {
   res.json({
-    message: 'Notion Graph Service - Business Tool & ECP Support',
+    message: 'Notion Graph Service - Enhanced Bottom-Up Layout',
     status: 'running',
     timestamp: new Date().toISOString(),
     firebase: isFirebaseEnabled ? 'enabled' : 'disabled',
     notion: NOTION_TOKEN ? 'configured' : 'missing',
     supportedTypes: ['Business ECP', 'Business Tool', 'Conditions', 'Policies', 'Events', 'JSON Code'],
+    layoutConfig: LAYOUT_CONFIG,
     endpoints: [
       'GET /health',
       'POST /api/create-graph',
       'POST /api/create-business-tool-graph',
-      'GET /api/graph-data/:pageId'
+      'GET /api/graph-data/:pageId',
+      'POST /api/update-layout-config',
+      'GET /api/layout-config'
     ]
   });
 });
@@ -814,7 +858,43 @@ app.get('/health', (req, res) => {
     notion: NOTION_TOKEN ? 'configured' : 'missing',
     storage: isFirebaseEnabled ? 'firestore' : 'memory',
     memoryGraphs: graphStorage.size,
-    supportedGraphTypes: ['businessECP', 'businessTool']
+    supportedGraphTypes: ['businessECP', 'businessTool'],
+    layoutConfig: LAYOUT_CONFIG
+  });
+});
+
+// API endpoint to update layout configuration
+app.post('/api/update-layout-config', (req, res) => {
+  try {
+    const { horizontalSpacing, verticalSpacing, nodeWidth, nodeHeight, childlessNodeOffset } = req.body;
+    
+    const newConfig = {};
+    if (horizontalSpacing !== undefined) newConfig.HORIZONTAL_SPACING = horizontalSpacing;
+    if (verticalSpacing !== undefined) newConfig.VERTICAL_SPACING = verticalSpacing;
+    if (nodeWidth !== undefined) newConfig.NODE_WIDTH = nodeWidth;
+    if (nodeHeight !== undefined) newConfig.NODE_HEIGHT = nodeHeight;
+    if (childlessNodeOffset !== undefined) newConfig.CHILDLESS_NODE_OFFSET = childlessNodeOffset;
+    
+    updateLayoutConfig(newConfig);
+    
+    res.json({
+      success: true,
+      message: 'Layout configuration updated successfully',
+      currentConfig: LAYOUT_CONFIG
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// API endpoint to get current layout configuration
+app.get('/api/layout-config', (req, res) => {
+  res.json({
+    success: true,
+    config: LAYOUT_CONFIG
   });
 });
 
@@ -854,7 +934,7 @@ app.post('/api/create-graph', async (req, res) => {
   const startTime = Date.now();
   
   try {
-    const { pageId, text } = req.body;
+    const { pageId, text, layoutConfig } = req.body;
 
     if (!pageId || !text) {
       return res.status(400).json({
@@ -868,7 +948,8 @@ app.post('/api/create-graph', async (req, res) => {
     const toggleStructure = await fetchToggleBlockStructure({ pageId, text });
     console.log(`✅ Toggle structure extracted in ${Date.now() - startTime}ms`);
     
-    const graphData = transformToggleToReactFlow(toggleStructure.result);
+    // Use custom layout config if provided
+    const graphData = transformToggleToReactFlow(toggleStructure.result, layoutConfig);
     console.log(`✅ Graph transformed: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges`);
     
     const cleanedGraphData = sanitizeGraphData(graphData);
@@ -895,7 +976,8 @@ app.post('/api/create-graph', async (req, res) => {
           edges: cleanedGraphData.edges.length,
           nodeTypes: cleanedGraphData.metadata.nodeTypes,
           storage: isFirebaseEnabled ? 'firebase' : 'memory',
-          processingTimeMs: Date.now() - startTime
+          processingTimeMs: Date.now() - startTime,
+          layoutConfig: cleanedGraphData.metadata.layout
         },
         notionResult: appendResult,
         message: `✅ Business ECP graph created successfully! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'}`
@@ -914,7 +996,8 @@ app.post('/api/create-graph', async (req, res) => {
           edges: cleanedGraphData.edges.length,
           nodeTypes: cleanedGraphData.metadata.nodeTypes,
           storage: isFirebaseEnabled ? 'firebase' : 'memory',
-          processingTimeMs: Date.now() - startTime
+          processingTimeMs: Date.now() - startTime,
+          layoutConfig: cleanedGraphData.metadata.layout
         },
         warning: `Graph created but failed to add to Notion page: ${notionError.message}`,
         message: `⚠️ Business ECP graph created successfully but couldn't add to Notion page.`
@@ -950,7 +1033,7 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
   const startTime = Date.now();
   
   try {
-    const { pageId, text = 'Business Tool' } = req.body;
+    const { pageId, text = 'Business Tool', layoutConfig } = req.body;
 
     if (!pageId) {
       return res.status(400).json({
@@ -964,7 +1047,8 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
     const toggleStructure = await fetchToggleBlockStructure({ pageId, text });
     console.log(`✅ Toggle structure extracted in ${Date.now() - startTime}ms`);
     
-    const graphData = transformToggleToReactFlow(toggleStructure.result);
+    // Use custom layout config if provided
+    const graphData = transformToggleToReactFlow(toggleStructure.result, layoutConfig);
     console.log(`✅ Graph transformed: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges`);
     
     const cleanedGraphData = sanitizeGraphData(graphData);
@@ -991,7 +1075,8 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
           edges: cleanedGraphData.edges.length,
           nodeTypes: cleanedGraphData.metadata.nodeTypes,
           storage: isFirebaseEnabled ? 'firebase' : 'memory',
-          processingTimeMs: Date.now() - startTime
+          processingTimeMs: Date.now() - startTime,
+          layoutConfig: cleanedGraphData.metadata.layout
         },
         notionResult: appendResult,
         message: `✅ Business Tool graph created successfully! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'}`
@@ -1010,7 +1095,8 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
           edges: cleanedGraphData.edges.length,
           nodeTypes: cleanedGraphData.metadata.nodeTypes,
           storage: isFirebaseEnabled ? 'firebase' : 'memory',
-          processingTimeMs: Date.now() - startTime
+          processingTimeMs: Date.now() - startTime,
+          layoutConfig: cleanedGraphData.metadata.layout
         },
         warning: `Graph created but failed to add to Notion page: ${notionError.message}`,
         message: `⚠️ Business Tool graph created successfully but couldn't add to Notion page.`
@@ -1239,6 +1325,7 @@ if (require.main === module) {
     console.log(`🏢 Business ECP support: Enabled`);
     console.log(`🛠️ Business Tool support: Enabled`);
     console.log(`📊 Graph structure extraction: Enabled`);
-    console.log(`🎯 Bottom-up layout algorithm: Active`);
+    console.log(`🎯 Enhanced bottom-up layout algorithm: Active`);
+    console.log(`📐 Default layout config:`, LAYOUT_CONFIG);
   });
 }
