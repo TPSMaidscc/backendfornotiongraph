@@ -448,7 +448,7 @@ async function simplifyBlockForVercel(block, headers, depth) {
   return simplified;
 }
 
-// ===== COMPLETELY FIXED LAYOUT TRANSFORMATION =====
+// ===== COMPLETELY FIXED LAYOUT TRANSFORMATION WITH CONSECUTIVE SIBLINGS =====
 function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
   const config = { ...LAYOUT_CONFIG, ...customConfig };
   
@@ -462,7 +462,7 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
     PRESERVE_HIERARCHY
   } = config;
 
-  console.log(`🔧 Using COMPLETELY FIXED layout configuration:`, config);
+  console.log(`🔧 Using CONSECUTIVE SIBLINGS layout configuration:`, config);
   
   const toggleStructure = JSON.parse(toggleStructureJson);
   const nodes = [];
@@ -645,137 +645,135 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
     return nodeId;
   }
   
-  console.log(`🚀 Starting COMPLETELY FIXED bottom-up transformation...`);
+  console.log(`🚀 Starting CONSECUTIVE SIBLINGS layout transformation...`);
   
   createNode(toggleStructure.toggleBlock);
   
   console.log(`📊 Created ${allNodes.size} nodes and ${edges.length} edges`);
   
-  // ===== COMPLETELY FIXED BOTTOM-UP LAYOUT =====
+  // ===== FIXED CONSECUTIVE SIBLINGS LAYOUT =====
   
   const maxLevel = Math.max(...nodesByLevel.keys());
-  console.log(`📏 Processing ${maxLevel + 1} levels for COMPLETELY FIXED layout`);
+  console.log(`📏 Processing ${maxLevel + 1} levels for CONSECUTIVE SIBLINGS layout`);
   
-  // **THE CRITICAL FIX: PROPERLY GROUP CHILDREN BY PARENT**
-  const bottomLevel = maxLevel;
-  const bottomNodes = nodesByLevel.get(bottomLevel) || [];
-  
-  console.log(`🔽 FIXING bottom level (${bottomLevel}) with ${bottomNodes.length} nodes`);
-  
-  if (bottomNodes.length > 0) {
-    const bottomY = bottomLevel * VERTICAL_SPACING;
-    
-    // Group bottom nodes by their parent
-    const nodesByParent = new Map();
-    const orphanNodes = [];
-    
-    bottomNodes.forEach(node => {
-      if (node.parentId) {
-        if (!nodesByParent.has(node.parentId)) {
-          nodesByParent.set(node.parentId, []);
-        }
-        nodesByParent.get(node.parentId).push(node);
-      } else {
-        orphanNodes.push(node);
-      }
-    });
-    
-    console.log(`📊 FIXED grouping: ${nodesByParent.size} parent groups, ${orphanNodes.length} orphan nodes`);
-    
-    // **CRITICAL FIX: Position each parent's children CONSECUTIVELY**
-    const parentGroups = Array.from(nodesByParent.entries());
-    const GROUP_GAP = HORIZONTAL_SPACING * 4; // Large gap between parent groups
-    
-    let currentX = 0;
-    
-    // Calculate total width to center everything
-    let totalWidth = 0;
-    parentGroups.forEach(([parentId, children]) => {
-      const groupWidth = (children.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING) + NODE_WIDTH;
-      totalWidth += groupWidth;
-    });
-    if (parentGroups.length > 1) {
-      totalWidth += (parentGroups.length - 1) * GROUP_GAP;
-    }
-    
-    currentX = -totalWidth / 2;
-    
-    parentGroups.forEach(([parentId, children], groupIndex) => {
-      console.log(`🔧 FIXING group for parent ${parentId}: ${children.length} children - positioning CONSECUTIVELY`);
-      
-      // Position this parent's children CONSECUTIVELY starting from currentX
-      children.forEach((child, childIndex) => {
-        const childX = currentX + (childIndex * (NODE_WIDTH + HORIZONTAL_SPACING));
-        child.position = { x: childX, y: bottomY };
-        console.log(`🎯 FIXED GROUPED child ${child.id}: (${childX}, ${bottomY}) [parent: ${parentId}, consecutive: ${childIndex}]`);
-      });
-      
-      // Advance currentX to next group
-      const groupWidth = (children.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING) + NODE_WIDTH;
-      currentX += groupWidth + GROUP_GAP;
-    });
-    
-    // Position orphan nodes
-    if (orphanNodes.length > 0) {
-      orphanNodes.forEach((node, index) => {
-        const x = currentX + (index * (NODE_WIDTH + HORIZONTAL_SPACING));
-        node.position = { x, y: bottomY };
-        console.log(`📍 Orphan node ${node.id}: (${x}, ${bottomY})`);
-      });
-    }
-  }
-  
-  // Position upper levels
-  for (let level = maxLevel - 1; level >= 0; level--) {
+  // Start from the deepest level and work upwards
+  for (let level = maxLevel; level >= 0; level--) {
     const levelNodes = nodesByLevel.get(level) || [];
     const y = level * VERTICAL_SPACING;
     
-    const nodesWithChildren = levelNodes.filter(node => 
-      nodeRelationships.has(node.id) && nodeRelationships.get(node.id).length > 0
-    );
-    const nodesWithoutChildren = levelNodes.filter(node => 
-      !nodeRelationships.has(node.id) || nodeRelationships.get(node.id).length === 0
-    );
+    console.log(`🔄 Processing level ${level} with ${levelNodes.length} nodes`);
     
-    // Center parents over their GROUPED children
-    nodesWithChildren.forEach(nodeData => {
-      const children = nodeRelationships.get(nodeData.id) || [];
-      const childPositions = children.map(childId => {
-        const childNode = allNodes.get(childId);
-        return childNode.position.x;
-      });
+    if (level === maxLevel) {
+      // For the bottom level, group children by parent and position consecutively
+      const nodesByParent = new Map();
+      const orphanNodes = [];
       
-      if (childPositions.length > 0) {
-        const leftmostChildX = Math.min(...childPositions);
-        const rightmostChildX = Math.max(...childPositions);
-        const centerX = (leftmostChildX + rightmostChildX) / 2;
-        
-        nodeData.position = { x: centerX, y };
-        console.log(`🎯 Parent ${nodeData.id} PROPERLY CENTERED at (${centerX}, ${y}) over GROUPED children [${leftmostChildX}, ${rightmostChildX}]`);
-      }
-    });
-    
-    // Position childless nodes
-    if (nodesWithoutChildren.length > 0) {
-      const allPositionedX = nodesWithChildren.map(node => node.position.x);
-      let startX;
-      
-      if (allPositionedX.length === 0) {
-        if (nodesWithoutChildren.length === 1 && CENTER_SINGLE_NODES) {
-          startX = 0;
+      levelNodes.forEach(node => {
+        if (node.parentId) {
+          if (!nodesByParent.has(node.parentId)) {
+            nodesByParent.set(node.parentId, []);
+          }
+          nodesByParent.get(node.parentId).push(node);
         } else {
-          const totalWidth = (nodesWithoutChildren.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING);
-          startX = -totalWidth / 2;
+          orphanNodes.push(node);
         }
-      } else {
-        const maxOccupiedX = Math.max(...allPositionedX);
-        startX = maxOccupiedX + (NODE_WIDTH / 2) + HORIZONTAL_SPACING + CHILDLESS_NODE_OFFSET + (NODE_WIDTH / 2);
+      });
+      
+      console.log(`📊 Bottom level grouping: ${nodesByParent.size} parent groups, ${orphanNodes.length} orphan nodes`);
+      
+      // Position each parent's children CONSECUTIVELY
+      const parentGroups = Array.from(nodesByParent.entries());
+      const GROUP_SEPARATION = HORIZONTAL_SPACING * 2; // Moderate gap between parent groups
+      
+      let currentX = 0;
+      
+      // Calculate total width needed for all groups
+      let totalWidth = 0;
+      parentGroups.forEach(([parentId, children]) => {
+        const groupWidth = (children.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING) + NODE_WIDTH;
+        totalWidth += groupWidth;
+      });
+      if (parentGroups.length > 1) {
+        totalWidth += (parentGroups.length - 1) * GROUP_SEPARATION;
       }
       
-      nodesWithoutChildren.forEach((nodeData, index) => {
-        const x = startX + (index * (NODE_WIDTH + HORIZONTAL_SPACING));
-        nodeData.position = { x, y };
+      // Start from the left edge to center everything
+      currentX = -totalWidth / 2;
+      
+      parentGroups.forEach(([parentId, children], groupIndex) => {
+        console.log(`🔧 Positioning group for parent ${parentId}: ${children.length} children CONSECUTIVELY`);
+        
+        // Position this parent's children CONSECUTIVELY starting from currentX
+        children.forEach((child, childIndex) => {
+          const childX = currentX + (childIndex * (NODE_WIDTH + HORIZONTAL_SPACING));
+          child.position = { x: childX, y };
+          console.log(`🎯 CONSECUTIVE child ${child.id}: (${childX}, ${y}) [parent: ${parentId}, index: ${childIndex}]`);
+        });
+        
+        // Move currentX to start of next group
+        const groupWidth = (children.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING) + NODE_WIDTH;
+        currentX += groupWidth + GROUP_SEPARATION;
       });
+      
+      // Position orphan nodes at the end
+      if (orphanNodes.length > 0) {
+        orphanNodes.forEach((node, index) => {
+          const x = currentX + (index * (NODE_WIDTH + HORIZONTAL_SPACING));
+          node.position = { x, y };
+          console.log(`📍 Orphan node ${node.id}: (${x}, ${y})`);
+        });
+      }
+      
+    } else {
+      // For upper levels, center parents over their children
+      const nodesWithChildren = levelNodes.filter(node => 
+        nodeRelationships.has(node.id) && nodeRelationships.get(node.id).length > 0
+      );
+      const nodesWithoutChildren = levelNodes.filter(node => 
+        !nodeRelationships.has(node.id) || nodeRelationships.get(node.id).length === 0
+      );
+      
+      // Center parents over their CONSECUTIVE children
+      nodesWithChildren.forEach(nodeData => {
+        const children = nodeRelationships.get(nodeData.id) || [];
+        const childPositions = children.map(childId => {
+          const childNode = allNodes.get(childId);
+          return childNode.position.x;
+        });
+        
+        if (childPositions.length > 0) {
+          const leftmostChildX = Math.min(...childPositions);
+          const rightmostChildX = Math.max(...childPositions);
+          const centerX = (leftmostChildX + rightmostChildX) / 2;
+          
+          nodeData.position = { x: centerX, y };
+          console.log(`🎯 Parent ${nodeData.id} CENTERED at (${centerX}, ${y}) over consecutive children [${leftmostChildX}, ${rightmostChildX}]`);
+        }
+      });
+      
+      // Position childless nodes to the right
+      if (nodesWithoutChildren.length > 0) {
+        const allPositionedX = nodesWithChildren.map(node => node.position.x);
+        let startX;
+        
+        if (allPositionedX.length === 0) {
+          if (nodesWithoutChildren.length === 1 && CENTER_SINGLE_NODES) {
+            startX = 0;
+          } else {
+            const totalWidth = (nodesWithoutChildren.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING);
+            startX = -totalWidth / 2;
+          }
+        } else {
+          const maxOccupiedX = Math.max(...allPositionedX);
+          startX = maxOccupiedX + (NODE_WIDTH / 2) + HORIZONTAL_SPACING + CHILDLESS_NODE_OFFSET + (NODE_WIDTH / 2);
+        }
+        
+        nodesWithoutChildren.forEach((nodeData, index) => {
+          const x = startX + (index * (NODE_WIDTH + HORIZONTAL_SPACING));
+          nodeData.position = { x, y };
+          console.log(`📍 Childless node ${nodeData.id}: (${x}, ${y})`);
+        });
+      }
     }
   }
   
@@ -805,7 +803,7 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
     nodes.push(node);
   });
   
-  console.log(`✅ COMPLETELY FIXED layout completed: ${nodes.length} nodes with PROPER consecutive grouping`);
+  console.log(`✅ CONSECUTIVE SIBLINGS layout completed: ${nodes.length} nodes with proper consecutive positioning`);
   
   const nodeTypes = {
     businessTool: nodes.filter(n => n.data.nodeType === 'businessTool').length,
@@ -828,9 +826,9 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
       nodeTypes: nodeTypes,
       layout: {
         ...config,
-        type: 'completelyFixedBottomUpGrouped',
-        algorithm: 'bottom-up-consecutive-children-grouping',
-        groupGap: HORIZONTAL_SPACING * 4,
+        type: 'consecutiveSiblingsLayout',
+        algorithm: 'consecutive-siblings-positioning',
+        groupSeparation: HORIZONTAL_SPACING * 2,
         childSpacing: HORIZONTAL_SPACING
       }
     }
