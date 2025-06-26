@@ -1,11 +1,11 @@
 const express = require('express');
 const { Client } = require('@notionhq/client');
 const cors = require('cors');
-const OpenAI = require('openai');
-// Initialize OpenAI
-const openai = new OpenAI({
-  apiKey: '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'
+const { Anthropic } = require('@anthropic-ai/sdk');
+const anthropic = new Anthropic({
+  apiKey: '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'
 });
+
 
 // Firebase Admin SDK
 let admin = null;
@@ -77,65 +77,55 @@ const graphStorage = new Map();
 // ===== OPENAI FUNCTIONS =====
 async function generatePolicyTitle(policyContent) {
   try {
-    console.log(`🤖 Generating policy title for content: ${policyContent.substring(0, 100)}...`);
-    
-    const prompt = `Summarize the policy into exactly 1-6 words that capture the main action or rule. Focus on the key instruction or outcome. Use simple, clear language.
+    const prompt = `Summarize the policy into exactly 1-6 words that capture the main action or rule. Focus on the key instruction or outcome. Use simple, clear language.\n\nPolicy: ${policyContent}\n\n1-6-word title:`;
 
-Policy: ${policyContent}
-
-1-6-word title:`;
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+    const completion = await anthropic.messages.create({
+      model: 'claude-3-haiku-20240307', // or opus/sonnet depending on use case
+      max_tokens: 50,
+      temperature: 0.3,
       messages: [
         {
-          role: "user",
+          role: 'user',
           content: prompt
         }
-      ],
-      max_tokens: 50,
-      temperature: 0.3
+      ]
     });
 
-    const title = completion.choices[0].message.content.trim();
+    const title = completion.content[0]?.text?.trim() || 'Policy Summary';
     console.log(`✅ Generated policy title: "${title}"`);
     return title;
   } catch (error) {
-    console.error('❌ Error generating policy title:', error);
+    console.error('❌ Error generating policy title (Anthropic):', error);
     return 'Policy Summary';
   }
 }
 
+
 async function generateEventTitle(eventContent) {
   try {
-    console.log(`🤖 Generating event title for content: ${eventContent.substring(0, 100)}...`);
-    
-    const prompt = `Summarize this event or process into 1-6 words that capture the main action being performed. Focus on what is being done or accomplished. Use active, clear language.
+    const prompt = `Summarize this event or process into 1-6 words that capture the main action being performed. Focus on what is being done or accomplished. Use active, clear language.\n\nEvent/Process: ${eventContent}\n\n1-6-word title:`;
 
-Event/Process: ${eventContent}
-
-1-6-word title:`;
-
-    const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+    const completion = await anthropic.messages.create({
+      model: 'claude-3-haiku-20240307',
+      max_tokens: 50,
+      temperature: 0.3,
       messages: [
         {
-          role: "user",
+          role: 'user',
           content: prompt
         }
-      ],
-      max_tokens: 50,
-      temperature: 0.3
+      ]
     });
 
-    const title = completion.choices[0].message.content.trim();
+    const title = completion.content[0]?.text?.trim() || 'Event Summary';
     console.log(`✅ Generated event title: "${title}"`);
     return title;
   } catch (error) {
-    console.error('❌ Error generating event title:', error);
+    console.error('❌ Error generating event title (Anthropic):', error);
     return 'Event Summary';
   }
 }
+
 
 // ===== LAYOUT CONFIGURATION =====
 const LAYOUT_CONFIG = {
