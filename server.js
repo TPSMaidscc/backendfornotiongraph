@@ -49,7 +49,7 @@ let isOpenAIEnabled = false;
 
 try {
   const OPENAI_API_KEY = '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';
-  
+   
   if (OPENAI_API_KEY && OPENAI_API_KEY !== 'YOUR_OPENAI_API_KEY_HERE') {
     openai = new OpenAI({
       apiKey: OPENAI_API_KEY
@@ -118,6 +118,7 @@ async function generateSmartSummary(content, nodeType) {
   try {
     console.log(`🤖 Generating OpenAI summary for ${nodeType}: ${content.substring(0, 100)}...`);
     
+    
     const prompt = nodeType === 'policy' 
       ? `"Summarize the policy into exactly 1-6  words that capture the main action or rule. Focus on the key instruction or outcome. Use simple, clear language.
         1-6-word title:"
@@ -143,7 +144,7 @@ async function generateSmartSummary(content, nodeType) {
          `;
 
     const completion = await openai.chat.completions.create({
-      model: "o1",
+      model: "gpt-3.5-turbo",
       messages: [
         {
           role: "system",
@@ -713,6 +714,7 @@ function applySiblingSortingLayer(graphData, cfg = {}) {
 // ===== ENHANCED EXTRACT CONTENT FOR POLICIES AND EVENTS =====
 async function extractContentForSummary(block) {
   if (!block.children || !Array.isArray(block.children)) {
+    console.log('⚠️ No children found in block for content extraction');
     return '';
   }
 
@@ -722,12 +724,15 @@ async function extractContentForSummary(block) {
     if (childBlock.content && childBlock.content.trim() !== '' && childBlock.content !== '—') {
       const childContent = childBlock.content.trim();
       
-      // Skip other structured content types
+      // Skip other structured content types but allow everything else
       if (!/←\s*Policy\s*:/.test(childContent) && 
           !/←\s*Event/.test(childContent) &&
           !/←\s*JSON\s*Code/.test(childContent) &&
-          !/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(childContent)) {
+          !/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(childContent) &&
+          !/Business\s*Tool/i.test(childContent) &&
+          !/Business\s*ECP/i.test(childContent)) {
         
+        console.log(`📝 Collected content: "${childContent.substring(0, 100)}..."`);
         contentBlocks.push(childContent);
       }
     }
@@ -738,9 +743,13 @@ async function extractContentForSummary(block) {
     }
   };
 
+  console.log(`🔍 Extracting content from ${block.children.length} child blocks`);
   block.children.forEach(collectContent);
   
-  return contentBlocks.join('\n\n').trim();
+  const result = contentBlocks.join('\n\n').trim();
+  console.log(`✅ Extracted ${contentBlocks.length} content blocks, total length: ${result.length} characters`);
+  
+  return result;
 }
 
 // ===== LAYOUT TRANSFORMATION WITH SIBLING SORTING AND OPENAI SUMMARIES =====
@@ -829,10 +838,14 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
       
       if (block) {
         const policyContent = await extractContentForSummary(block);
-        if (policyContent && policyContent.trim().length > 0) {
-          console.log(`📝 Policy content found: ${policyContent.substring(0, 100)}...`);
+        console.log(`📊 Policy content extracted: "${policyContent.substring(0, 200)}..." (${policyContent.length} chars)`);
+        
+        if (policyContent && policyContent.trim().length > 10) {
+          console.log(`📝 Policy content found, generating summary...`);
           title = await generateSmartSummary(policyContent, 'policy');
+          console.log(`✅ Policy summary generated: "${title}"`);
         } else {
+          console.log(`⚠️ No meaningful policy content found, using fallback title extraction`);
           // Fallback to title extraction
           const match = content.match(/←\s*Policy\s*:\s*\(→\s*(.+?)\s*←\)/);
           if (match) {
@@ -849,6 +862,7 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
           }
         }
       } else {
+        console.log(`⚠️ No block provided for policy, using fallback`);
         // Fallback when no block is provided
         const match = content.match(/←\s*Policy\s*:\s*\(→\s*(.+?)\s*←\)/);
         if (match) {
@@ -864,10 +878,14 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
       
       if (block) {
         const eventContent = await extractContentForSummary(block);
-        if (eventContent && eventContent.trim().length > 0) {
-          console.log(`📝 Event content found: ${eventContent.substring(0, 100)}...`);
+        console.log(`📊 Event content extracted: "${eventContent.substring(0, 200)}..." (${eventContent.length} chars)`);
+        
+        if (eventContent && eventContent.trim().length > 10) {
+          console.log(`📝 Event content found, generating summary...`);
           title = await generateSmartSummary(eventContent, 'event');
+          console.log(`✅ Event summary generated: "${title}"`);
         } else {
+          console.log(`⚠️ No meaningful event content found, using fallback title extraction`);
           // Fallback to title extraction
           if (content.match(/^\s*←\s*Event\s*$/)) {
             title = 'Event (No Title)';
@@ -878,6 +896,7 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
           }
         }
       } else {
+        console.log(`⚠️ No block provided for event, using fallback`);
         // Fallback when no block is provided
         if (content.match(/^\s*←\s*Event\s*$/)) {
           title = 'Event (No Content)';
