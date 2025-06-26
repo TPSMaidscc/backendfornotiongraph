@@ -48,7 +48,7 @@ let openai = null;
 let isOpenAIEnabled = false;
 
 try {
-  const OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'YOUR_OPENAI_API_KEY_HERE';
+  const OPENAI_API_KEY = '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';
   
   if (OPENAI_API_KEY && OPENAI_API_KEY !== 'YOUR_OPENAI_API_KEY_HERE') {
     openai = new OpenAI({
@@ -119,19 +119,39 @@ async function generateSmartSummary(content, nodeType) {
     console.log(`🤖 Generating OpenAI summary for ${nodeType}: ${content.substring(0, 100)}...`);
     
     const prompt = nodeType === 'policy' 
-      ? `Summarize this business policy in 1-5 words. Focus on the main action or requirement. Content: "${content}"`
-      : `Summarize this business event in 1-5 words. Focus on the main trigger or action. Content: "${content}"`;
+      ? `"Summarize the policy into exactly 1-6  words that capture the main action or rule. Focus on the key instruction or outcome. Use simple, clear language.
+        1-6-word title:"
+        **Example using your policy:**
+        Policy: Explain to the customer that since the monthly bank payment forms are approved and the current month payment will be deducted within 24 hours, the customer can reach us after the 24 hours have passed to switch the customer to paying via credit card only when the customer asks to switch from paying via direct debit to credit card.
+        4-word title: **"Wait 24hrs Switch Payment"**`
+      : `"Summarize this event or process into 1-6 words that capture the main action being performed. Focus on what is being done or accomplished. Use active, clear language.
+        Event/Process: [paste event description here]
+        1-6-word title:"
+        **Example using your event**
+        Event: Refer to the Jira below for details to how it was supposed to be implemented.
+
+        Steps:
+        Add the refund related to the customer's contract ID
+        Purpose should be: "Taxi reimbursement"
+        Amount: Amount the bot agreed on with the customer
+        Method of payment will then be automatically filled by the system
+
+        Add the receipt
+        Send the refund confirmation statement to the customer.
+
+        1-6-word title: "Process Taxi Refund Request"
+        `;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: "o1",
       messages: [
         {
           role: "system",
-          content: "You are a business analyst expert at creating concise summaries. Respond with only 1-5 words that capture the essence of the content. No quotes, no explanations, just the summary."
+          content: prompt
         },
         {
           role: "user",
-          content: prompt
+          content: content
         }
       ],
       max_tokens: 20,
