@@ -86,7 +86,7 @@ Policy: ${policyContent}
 1-6-word title:`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: "o1",
       messages: [
         {
           role: "user",
@@ -117,7 +117,7 @@ Event/Process: ${eventContent}
 1-6-word title:`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: "o1",
       messages: [
         {
           role: "user",
@@ -148,7 +148,7 @@ Technical condition: ${conditionContent}
 Human-readable condition:`;
 
     const completion = await openai.chat.completions.create({
-      model: "gpt-3.5-turbo",
+      model: "o1",
       messages: [
         {
           role: "user",
