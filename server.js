@@ -48,7 +48,7 @@ let openai = null;
 let isOpenAIEnabled = false;
 
 try {
-  const OPENAI_API_KEY = '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';
+  const OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'YOUR_OPENAI_API_KEY_HERE';
   
   if (OPENAI_API_KEY && OPENAI_API_KEY !== 'YOUR_OPENAI_API_KEY_HERE') {
     openai = new OpenAI({
