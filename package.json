@@ -2,6 +2,7 @@
   "name": "notion-graph-proxy",
   "main": "server.js",
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.55.0",
     "@notionhq/client": "^2.2.3",
     "cors": "^2.8.5",
     "express": "^4.18.2",

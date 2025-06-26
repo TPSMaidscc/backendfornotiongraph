@@ -1,11 +1,11 @@
 const express = require('express');
 const { Client } = require('@notionhq/client');
 const cors = require('cors');
-const OpenAI = require('openai');
+const { Anthropic } = require('@anthropic-ai/sdk');
 
 // Initialize OpenAI
 const openai = new OpenAI({
-  apiKey: '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'
+  apiKey: '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'
 });
 
 // Firebase Admin SDK
