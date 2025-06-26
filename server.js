@@ -1,3 +1,4 @@
+
 const express = require('express');
 const { Client } = require('@notionhq/client');
 const cors = require('cors');
@@ -49,7 +50,7 @@ let isOpenAIEnabled = false;
 
 try {
   const OPENAI_API_KEY = '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';
-   
+  
   if (OPENAI_API_KEY && OPENAI_API_KEY !== 'YOUR_OPENAI_API_KEY_HERE') {
     openai = new OpenAI({
       apiKey: OPENAI_API_KEY
@@ -96,7 +97,7 @@ const graphStorage = new Map();
 const LAYOUT_CONFIG = {
   NODE_WIDTH: 200,           
   NODE_HEIGHT: 150,          
-  HORIZONTAL_SPACING: 50,    // Gap between consecutive siblings
+  HORIZONTAL_SPACING: 50,    
   VERTICAL_SPACING: 200,     
   CHILDLESS_NODE_OFFSET: 100, 
   CENTER_SINGLE_NODES: true, 
@@ -116,34 +117,31 @@ async function generateSmartSummary(content, nodeType) {
   }
 
   try {
-    console.log(`🤖 Generating OpenAI summary for ${nodeType}: ${content.substring(0, 100)}...`);
-    
+    console.log(`🤖 Generating OpenAI summary for ${nodeType}: "${content.substring(0, 200)}..."`);
     
     const prompt = nodeType === 'policy' 
-      ? `"Summarize the policy into exactly 1-6  words that capture the main action or rule. Focus on the key instruction or outcome. Use simple, clear language.
-        1-6-word title:"
-        **Example using your policy:**
-        Policy: Explain to the customer that since the monthly bank payment forms are approved and the current month payment will be deducted within 24 hours, the customer can reach us after the 24 hours have passed to switch the customer to paying via credit card only when the customer asks to switch from paying via direct debit to credit card.
-        4-word title: **"Wait 24hrs Switch Payment"**`
-      : `"Summarize this event or process into 1-6 words that capture the main action being performed. Focus on what is being done or accomplished. Use active, clear language.
-        Event/Process: [paste event description here]
-        1-6-word title:"
-        **Example using your event**
-        Event: Refer to the Jira below for details to how it was supposed to be implemented.
+    ? `"Summarize the policy into exactly 1-6  words that capture the main action or rule. Focus on the key instruction or outcome. Use simple, clear language.
+      1-6-word title:"
+      **Example using your policy:**
+      Policy: Explain to the customer that since the monthly bank payment forms are approved and the current month payment will be deducted within 24 hours, the customer can reach us after the 24 hours have passed to switch the customer to paying via credit card only when the customer asks to switch from paying via direct debit to credit card.
+      4-word title: **"Wait 24hrs Switch Payment"**`
+    : `"Summarize this event or process into 1-6 words that capture the main action being performed. Focus on what is being done or accomplished. Use active, clear language.
+      Event/Process: [paste event description here]
+      1-6-word title:"
+      **Example using your event**
+      Event: Refer to the Jira below for details to how it was supposed to be implemented.
 
-        Steps:
-        Add the refund related to the customer's contract ID
-        Purpose should be: "Taxi reimbursement"
-        Amount: Amount the bot agreed on with the customer
-        Method of payment will then be automatically filled by the system
+      Steps:
+      Add the refund related to the customer's contract ID
+      Purpose should be: "Taxi reimbursement"
+      Amount: Amount the bot agreed on with the customer
+      Method of payment will then be automatically filled by the system
 
-        Add the receipt
-        Send the refund confirmation statement to the customer.
+      Add the receipt
+      Send the refund confirmation statement to the customer.
 
-        1-6-word title: "Process Taxi Refund Request"
-         `;
-
-    const completion = await openai.chat.completions.create({
+      1-6-word title: "Process Taxi Refund Request"
+       `;    const completion = await openai.chat.completions.create({
       model: "gpt-3.5-turbo",
       messages: [
         {
@@ -155,11 +153,20 @@ async function generateSmartSummary(content, nodeType) {
           content: content
         }
       ],
-      max_tokens: 20,
-      temperature: 0.3
+      max_tokens: 15,
+      temperature: 0.1
     });
 
-    const summary = completion.choices[0]?.message?.content?.trim() || generateFallbackSummary(content, nodeType);
+    let summary = completion.choices[0]?.message?.content?.trim();
+    
+    if (!summary || summary.length === 0) {
+      console.log('❌ OpenAI returned empty response, using fallback');
+      return generateFallbackSummary(content, nodeType);
+    }
+
+    // Clean up the summary
+    summary = summary.replace(/['"]/g, '').trim();
+    
     console.log(`✅ OpenAI summary generated: "${summary}"`);
     return summary;
 
@@ -195,7 +202,7 @@ function generateFallbackSummary(content, nodeType) {
   const words = cleanContent
     .split(/\s+/)
     .filter(word => word.length > 2) // Skip very short words
-    .filter(word => !/^(the|and|or|but|for|with|by|at|in|on|to|from)$/i.test(word)) // Skip common articles
+    .filter(word => !/^(the|and|or|but|for|with|by|at|in|on|to|from|a|an|is|are|was|were|be|been|being|have|has|had|do|does|did|will|would|could|should|may|might|must|can)$/i.test(word)) // Skip common words
     .slice(0, 4); // Take first 4 meaningful words
 
   if (words.length === 0) {
@@ -205,6 +212,48 @@ function generateFallbackSummary(content, nodeType) {
   const summary = words.join(' ');
   console.log(`✅ Fallback summary generated: "${summary}"`);
   return summary.length > 25 ? summary.substring(0, 22) + '...' : summary;
+}
+
+// ===== CONTENT EXTRACTION FOR POLICIES AND EVENTS =====
+function extractContentFromBlock(block) {
+  console.log(`🔍 Extracting content from block type: ${block.type}`);
+  
+  if (!block.children || !Array.isArray(block.children)) {
+    console.log('⚠️ No children found in block');
+    return '';
+  }
+
+  const contentParts = [];
+  
+  function processChild(child) {
+    if (!child.content) return;
+    
+    const content = child.content.trim();
+    if (!content || content === '—') return;
+    
+    // Skip structured elements but collect everything else
+    if (!/←\s*Policy\s*:/.test(content) && 
+        !/←\s*Event/.test(content) &&
+        !/←\s*JSON\s*Code/.test(content) &&
+        !/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(content) &&
+        !/Business\s*Tool/i.test(content) &&
+        !/Business\s*ECP/i.test(content)) {
+      
+      console.log(`📝 Adding content: "${content.substring(0, 100)}..."`);
+      contentParts.push(content);
+    }
+    
+    // Process nested children
+    if (child.children && Array.isArray(child.children)) {
+      child.children.forEach(processChild);
+    }
+  }
+  
+  block.children.forEach(processChild);
+  
+  const result = contentParts.join(' ').trim();
+  console.log(`✅ Extracted ${contentParts.length} parts, total: ${result.length} characters`);
+  return result;
 }
 
 // ===== FIREBASE FUNCTIONS =====
@@ -309,7 +358,7 @@ function generateGraphUrl(pageId) {
   return `${GRAPH_BASE_URL}?page=${pageId}`;
 }
 
-// ===== NEW FUNCTION TO FETCH PAGE TITLE =====
+// ===== FETCH PAGE TITLE =====
 async function fetchNotionPageTitle(pageId) {
   try {
     console.log(`📝 Fetching page title for: ${pageId}`);
@@ -320,11 +369,9 @@ async function fetchNotionPageTitle(pageId) {
       throw new Error('Notion page not found or access denied');
     }
 
-    // Extract title from different possible properties
     let title = 'Untitled Page';
     
     if (page.properties) {
-      // Look for title in common property names
       const titleProperty = page.properties.title || 
                            page.properties.Title || 
                            page.properties.Name || 
@@ -336,7 +383,6 @@ async function fetchNotionPageTitle(pageId) {
       }
     }
 
-    // Fallback: try to get title from the page object itself
     if (title === 'Untitled Page' && page.title) {
       title = page.title;
     }
@@ -346,11 +392,11 @@ async function fetchNotionPageTitle(pageId) {
     
   } catch (error) {
     console.error('❌ Error fetching page title:', error);
-    return 'Unknown Page'; // Fallback title
+    return 'Unknown Page';
   }
 }
 
-// ===== NOTION INTEGRATION FUNCTIONS =====
+// ===== NOTION INTEGRATION =====
 async function appendGraphToNotionPage(notionPageId, graphUrl, graphTitle) {
   try {
     console.log(`📝 Attempting to append graph to Notion page: ${notionPageId}`);
@@ -611,27 +657,22 @@ async function simplifyBlockForVercel(block, headers, depth) {
   return simplified;
 }
 
-/**
- * Tidy-tree layout that guarantees siblings – including childless ones
- * at any depth – are placed consecutively without overlap and every parent
- * is centred over its children.
- */
+// ===== LAYOUT FUNCTIONS =====
 function applySiblingSortingLayer(graphData, cfg = {}) {
   const {
     NODE_WIDTH = 200,
     NODE_HEIGHT = 150,
     HORIZONTAL_SPACING = 50,
     VERTICAL_SPACING = 200,
-    GROUP_SEPARATION = 150           // gap between independent root trees
+    GROUP_SEPARATION = 150
   } = cfg;
 
-  /* ----------  helpers & look-ups  ---------- */
-  const nodes = graphData.nodes.map(n => ({ ...n }));   // deep-clone
+  const nodes = graphData.nodes.map(n => ({ ...n }));
   const edges = [...graphData.edges];
 
-  const idToNode          = new Map(nodes.map(n => [n.id, n]));
-  const parentToChildren  = new Map();
-  const childToParent     = new Map();
+  const idToNode = new Map(nodes.map(n => [n.id, n]));
+  const parentToChildren = new Map();
+  const childToParent = new Map();
 
   edges.forEach(({ source, target }) => {
     if (!parentToChildren.has(source)) parentToChildren.set(source, []);
@@ -639,7 +680,6 @@ function applySiblingSortingLayer(graphData, cfg = {}) {
     childToParent.set(target, source);
   });
 
-  /* ----------  1️⃣  bottom-up pass – subtree widths  ---------- */
   const subtreeWidth = new Map();
 
   function measure(id) {
@@ -655,7 +695,7 @@ function applySiblingSortingLayer(graphData, cfg = {}) {
       if (i < children.length - 1) width += HORIZONTAL_SPACING;
     });
 
-    width = Math.max(width, NODE_WIDTH);        // parent is at least its own width
+    width = Math.max(width, NODE_WIDTH);
     subtreeWidth.set(id, width);
     return width;
   }
@@ -666,22 +706,19 @@ function applySiblingSortingLayer(graphData, cfg = {}) {
 
   rootIds.forEach(measure);
 
-  /* ----------  2️⃣  top-down pass – assign coordinates  ---------- */
   function place(id, centreX, level) {
-    const node      = idToNode.get(id);
-    node.position   = { x: centreX, y: level * VERTICAL_SPACING };
+    const node = idToNode.get(id);
+    node.position = { x: centreX, y: level * VERTICAL_SPACING };
 
     const children = parentToChildren.get(id) || [];
     if (children.length === 0) return;
 
-    // span of all children incl. gaps
     let span = 0;
     children.forEach((c, i) => {
       span += subtreeWidth.get(c);
       if (i < children.length - 1) span += HORIZONTAL_SPACING;
     });
 
-    // leftmost x where the first child starts
     let childLeft = centreX - span / 2;
 
     children.forEach(childId => {
@@ -691,68 +728,26 @@ function applySiblingSortingLayer(graphData, cfg = {}) {
     });
   }
 
-  let cursorX = 0;                               // lays out multiple roots left→right
+  let cursorX = 0;
   rootIds.forEach(rid => {
-    const centre   = cursorX + subtreeWidth.get(rid) / 2;
+    const centre = cursorX + subtreeWidth.get(rid) / 2;
     place(rid, centre, 0);
-    cursorX       += subtreeWidth.get(rid) + GROUP_SEPARATION;
+    cursorX += subtreeWidth.get(rid) + GROUP_SEPARATION;
   });
 
-  /* ----------  return updated graphData ---------- */
   return {
     ...graphData,
     nodes,
     metadata: {
       ...graphData.metadata,
-      siblingSortingApplied : true,
+      siblingSortingApplied: true,
       improvedSortingApplied: true,
-      algorithm             : 'tidy-tree-centred'
+      algorithm: 'tidy-tree-centred'
     }
   };
 }
 
-// ===== ENHANCED EXTRACT CONTENT FOR POLICIES AND EVENTS =====
-async function extractContentForSummary(block) {
-  if (!block.children || !Array.isArray(block.children)) {
-    console.log('⚠️ No children found in block for content extraction');
-    return '';
-  }
-
-  const contentBlocks = [];
-  
-  const collectContent = (childBlock) => {
-    if (childBlock.content && childBlock.content.trim() !== '' && childBlock.content !== '—') {
-      const childContent = childBlock.content.trim();
-      
-      // Skip other structured content types but allow everything else
-      if (!/←\s*Policy\s*:/.test(childContent) && 
-          !/←\s*Event/.test(childContent) &&
-          !/←\s*JSON\s*Code/.test(childContent) &&
-          !/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(childContent) &&
-          !/Business\s*Tool/i.test(childContent) &&
-          !/Business\s*ECP/i.test(childContent)) {
-        
-        console.log(`📝 Collected content: "${childContent.substring(0, 100)}..."`);
-        contentBlocks.push(childContent);
-      }
-    }
-    
-    // Recursively collect content from nested children
-    if (childBlock.children && Array.isArray(childBlock.children)) {
-      childBlock.children.forEach(collectContent);
-    }
-  };
-
-  console.log(`🔍 Extracting content from ${block.children.length} child blocks`);
-  block.children.forEach(collectContent);
-  
-  const result = contentBlocks.join('\n\n').trim();
-  console.log(`✅ Extracted ${contentBlocks.length} content blocks, total length: ${result.length} characters`);
-  
-  return result;
-}
-
-// ===== LAYOUT TRANSFORMATION WITH SIBLING SORTING AND OPENAI SUMMARIES =====
+// ===== MAIN TRANSFORMATION FUNCTION =====
 async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}, pageTitle = null) {
   const config = { ...LAYOUT_CONFIG, ...customConfig };
   
@@ -760,10 +755,7 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
     NODE_WIDTH,
     NODE_HEIGHT,
     HORIZONTAL_SPACING,
-    VERTICAL_SPACING,
-    CHILDLESS_NODE_OFFSET,
-    CENTER_SINGLE_NODES,
-    PRESERVE_HIERARCHY
+    VERTICAL_SPACING
   } = config;
 
   console.log(`🔧 Using layout configuration:`, config);
@@ -807,7 +799,6 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
     let title = content;
     
     if (type === 'businessECP') {
-      // Use the page title for Business ECP root nodes
       if (pageTitle) {
         title = pageTitle;
         console.log(`✅ Using page title for Business ECP: "${title}"`);
@@ -816,7 +807,6 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
         if (!title || title.includes('Type')) title = 'ECP Name';
       }
     } else if (type === 'businessTool') {
-      // Use the page title for Business Tool root nodes
       if (pageTitle) {
         title = pageTitle;
         console.log(`✅ Using page title for Business Tool: "${title}"`);
@@ -833,78 +823,54 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
         if (match2) title = match2[1].trim();
       }
     } else if (type === 'policy') {
-      // FOR POLICIES: Extract content and generate smart summary
-      console.log(`🤖 Generating smart summary for policy...`);
+      console.log(`🤖 Processing policy for smart summary...`);
       
       if (block) {
-        const policyContent = await extractContentForSummary(block);
-        console.log(`📊 Policy content extracted: "${policyContent.substring(0, 200)}..." (${policyContent.length} chars)`);
+        const policyContent = extractContentFromBlock(block);
+        console.log(`📊 Policy content extracted: "${policyContent.substring(0, 100)}..." (${policyContent.length} chars)`);
         
         if (policyContent && policyContent.trim().length > 10) {
-          console.log(`📝 Policy content found, generating summary...`);
+          console.log(`📝 Generating summary for policy content...`);
           title = await generateSmartSummary(policyContent, 'policy');
-          console.log(`✅ Policy summary generated: "${title}"`);
+          console.log(`✅ Policy summary: "${title}"`);
         } else {
-          console.log(`⚠️ No meaningful policy content found, using fallback title extraction`);
-          // Fallback to title extraction
+          console.log(`⚠️ No meaningful policy content, using fallback`);
           const match = content.match(/←\s*Policy\s*:\s*\(→\s*(.+?)\s*←\)/);
           if (match) {
             title = match[1].trim();
-            if (title.includes('Type your Policy Name Here')) title = 'Policy (Template)';
+            if (title.includes('Type your Policy Name Here')) title = 'Policy Template';
           } else {
-            const match2 = content.match(/←\s*Policy\s*:\s*(.+)/);
-            if (match2) {
-              title = match2[1].trim().replace(/^\(→\s*/, '').replace(/\s*←\)$/, '');
-              if (!title || title === "Type your Policy Name Here") title = 'Policy (Empty)';
-            } else {
-              title = 'Policy (No Title)';
-            }
+            title = 'Policy Content';
           }
         }
       } else {
-        console.log(`⚠️ No block provided for policy, using fallback`);
-        // Fallback when no block is provided
-        const match = content.match(/←\s*Policy\s*:\s*\(→\s*(.+?)\s*←\)/);
-        if (match) {
-          title = match[1].trim();
-          if (title.includes('Type your Policy Name Here')) title = 'Policy (Template)';
-        } else {
-          title = 'Policy (No Content)';
-        }
+        console.log(`⚠️ No block provided for policy`);
+        title = 'Policy';
       }
     } else if (type === 'event') {
-      // FOR EVENTS: Extract content and generate smart summary
-      console.log(`🤖 Generating smart summary for event...`);
+      console.log(`🤖 Processing event for smart summary...`);
       
       if (block) {
-        const eventContent = await extractContentForSummary(block);
-        console.log(`📊 Event content extracted: "${eventContent.substring(0, 200)}..." (${eventContent.length} chars)`);
+        const eventContent = extractContentFromBlock(block);
+        console.log(`📊 Event content extracted: "${eventContent.substring(0, 100)}..." (${eventContent.length} chars)`);
         
         if (eventContent && eventContent.trim().length > 10) {
-          console.log(`📝 Event content found, generating summary...`);
+          console.log(`📝 Generating summary for event content...`);
           title = await generateSmartSummary(eventContent, 'event');
-          console.log(`✅ Event summary generated: "${title}"`);
+          console.log(`✅ Event summary: "${title}"`);
         } else {
-          console.log(`⚠️ No meaningful event content found, using fallback title extraction`);
-          // Fallback to title extraction
+          console.log(`⚠️ No meaningful event content, using fallback`);
           if (content.match(/^\s*←\s*Event\s*$/)) {
-            title = 'Event (No Title)';
+            title = 'Event Trigger';
           } else {
             const match = content.match(/←\s*Event\s+(.+)/);
             if (match) title = match[1].trim();
-            else title = 'Event (Unknown)';
+            else title = 'Event Action';
           }
         }
       } else {
-        console.log(`⚠️ No block provided for event, using fallback`);
-        // Fallback when no block is provided
-        if (content.match(/^\s*←\s*Event\s*$/)) {
-          title = 'Event (No Content)';
-        } else {
-          const match = content.match(/←\s*Event\s+(.+)/);
-          if (match) title = match[1].trim();
-          else title = 'Event (Unknown)';
-        }
+        console.log(`⚠️ No block provided for event`);
+        title = 'Event';
       }
     } else if (type === 'jsonCode') {
       const match = content.match(/←\s*JSON\s*Code\s*(.*)/);
@@ -985,7 +951,8 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
       parentId: parentId,
       width: NODE_WIDTH,
       height: NODE_HEIGHT,
-      hasChildren: false
+      hasChildren: false,
+      aiSummary: (nodeType === 'policy' || nodeType === 'event') // Mark if this used AI summarization
     };
     
     allNodes.set(nodeId, nodeData);
@@ -1016,7 +983,7 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
       });
     }
     
-    console.log(`✅ Created ${nodeType} node: ${title}`);
+    console.log(`✅ Created ${nodeType} node: "${title}"`);
     
     if (block.children && Array.isArray(block.children)) {
       for (const child of block.children) {
@@ -1027,7 +994,7 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
     return nodeId;
   }
   
-  console.log(`🚀 Starting layout transformation with OpenAI summaries...`);
+  console.log(`🚀 Starting layout transformation...`);
   
   await createNode(toggleStructure.toggleBlock);
   
@@ -1046,7 +1013,6 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
     
     console.log(`🔄 Level ${level}: ${levelNodes.length} nodes`);
     
-    // Simple horizontal positioning (will be reorganized by sibling sorting)
     const totalWidth = (levelNodes.length - 1) * (NODE_WIDTH + HORIZONTAL_SPACING);
     let startX = -totalWidth / 2;
     
@@ -1071,7 +1037,8 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
         depth: nodeData.depth,
         width: NODE_WIDTH,
         height: NODE_HEIGHT,
-        hasChildren: nodeData.hasChildren
+        hasChildren: nodeData.hasChildren,
+        aiSummary: nodeData.aiSummary
       },
       type: 'custom',
       style: {
@@ -1093,8 +1060,13 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
     other: nodes.filter(n => !['businessTool', 'businessECP', 'condition', 'event', 'policy', 'jsonCode'].includes(n.data.nodeType)).length
   };
   
-  // **APPLY SIBLING SORTING LAYER**
-  console.log(`\n🚀 APPLYING SIBLING SORTING POST-PROCESSING...`);
+  // Count AI summaries
+  const aiSummaryCount = nodes.filter(n => n.data.aiSummary).length;
+  
+  console.log(`🤖 AI summaries generated: ${aiSummaryCount}`);
+  
+  // Apply sibling sorting layer
+  console.log(`🚀 APPLYING SIBLING SORTING POST-PROCESSING...`);
   
   const initialGraphData = {
     nodes,
@@ -1110,8 +1082,9 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
         type: 'consecutiveSiblingsWithSorting',
         algorithm: 'post-processing-sibling-grouping'
       },
-      pageTitle: pageTitle,  // Include page title in metadata
-      openAIEnabled: isOpenAIEnabled // Include OpenAI status in metadata
+      pageTitle: pageTitle,
+      openAIEnabled: isOpenAIEnabled,
+      aiSummaryCount: aiSummaryCount
     }
   };
   
@@ -1120,7 +1093,7 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
     NODE_HEIGHT: config.NODE_HEIGHT || 150,
     HORIZONTAL_SPACING: config.HORIZONTAL_SPACING || 50,
     VERTICAL_SPACING: config.VERTICAL_SPACING || 200,
-    GROUP_SEPARATION: 150 // Moderate gap between parent groups
+    GROUP_SEPARATION: 150
   });
   
   return finalGraphData;
@@ -1130,7 +1103,7 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
 
 app.get('/', (req, res) => {
   res.json({
-    message: 'Notion Graph Service - Sibling Sorting Applied with OpenAI Summaries',
+    message: 'Notion Graph Service - OpenAI Smart Summaries FIXED',
     status: 'running',
     timestamp: new Date().toISOString(),
     firebase: isFirebaseEnabled ? 'enabled' : 'disabled',
@@ -1252,18 +1225,18 @@ app.post('/api/create-graph', async (req, res) => {
       });
     }
 
-    console.log(`🏢 Creating Business ECP graph with sibling sorting and OpenAI summaries for page ${pageId} with text "${text}"`);
+    console.log(`🏢 Creating Business ECP graph with OpenAI summaries for page ${pageId} with text "${text}"`);
+    console.log(`🤖 OpenAI status: ${isOpenAIEnabled ? 'ENABLED' : 'DISABLED'}`);
 
-    // Fetch the page title first
     const pageTitle = await fetchNotionPageTitle(pageId);
     console.log(`📖 Using page title: "${pageTitle}"`);
 
     const toggleStructure = await fetchToggleBlockStructure({ pageId, text });
     console.log(`✅ Toggle structure extracted in ${Date.now() - startTime}ms`);
     
-    // PASS PAGE TITLE TO TRANSFORM FUNCTION
     const graphData = await transformToggleToReactFlow(toggleStructure.result, layoutConfig, pageTitle);
-    console.log(`✅ Graph transformed with sibling sorting and OpenAI summaries: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges`);
+    console.log(`✅ Graph transformed: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges`);
+    console.log(`🤖 AI summaries created: ${graphData.metadata.aiSummaryCount || 0}`);
     
     const cleanedGraphData = sanitizeGraphData(graphData);
 
@@ -1275,7 +1248,6 @@ app.post('/api/create-graph', async (req, res) => {
     console.log(`🔗 Generated graph URL: ${graphUrl}`);
 
     try {
-      // Use the page title in the heading that gets added to Notion
       const graphTitle = `🏢 Business ECP: ${pageTitle}`;
       const appendResult = await appendGraphToNotionPage(pageId, graphUrl, graphTitle);
       console.log(`✅ Graph successfully added to Notion page`);
@@ -1296,10 +1268,11 @@ app.post('/api/create-graph', async (req, res) => {
           layoutConfig: cleanedGraphData.metadata.layout,
           algorithm: 'sibling-sorting-post-processing',
           siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied,
-          smartSummariesEnabled: cleanedGraphData.metadata.openAIEnabled
+          smartSummariesEnabled: cleanedGraphData.metadata.openAIEnabled,
+          aiSummaryCount: cleanedGraphData.metadata.aiSummaryCount || 0
         },
         notionResult: appendResult,
-        message: `✅ Business ECP graph created for "${pageTitle}" with sibling sorting and ${isOpenAIEnabled ? 'OpenAI' : 'fallback'} summaries! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'}`
+        message: `✅ Business ECP graph created for "${pageTitle}" with ${isOpenAIEnabled ? 'OpenAI' : 'fallback'} summaries! ${cleanedGraphData.metadata.aiSummaryCount || 0} AI summaries generated.`
       });
       
     } catch (notionError) {
@@ -1321,10 +1294,11 @@ app.post('/api/create-graph', async (req, res) => {
           layoutConfig: cleanedGraphData.metadata.layout,
           algorithm: 'sibling-sorting-post-processing',
           siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied,
-          smartSummariesEnabled: cleanedGraphData.metadata.openAIEnabled
+          smartSummariesEnabled: cleanedGraphData.metadata.openAIEnabled,
+          aiSummaryCount: cleanedGraphData.metadata.aiSummaryCount || 0
         },
         warning: `Graph created but failed to add to Notion page: ${notionError.message}`,
-        message: `⚠️ Business ECP graph created for "${pageTitle}" with sibling sorting and ${isOpenAIEnabled ? 'OpenAI' : 'fallback'} summaries but couldn't add to Notion page.`
+        message: `⚠️ Business ECP graph created for "${pageTitle}" with ${isOpenAIEnabled ? 'OpenAI' : 'fallback'} summaries but couldn't add to Notion page.`
       });
     }
 
@@ -1366,18 +1340,18 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
       });
     }
 
-    console.log(`🛠️ Creating Business Tool graph with sibling sorting and OpenAI summaries for page ${pageId} with text "${text}"`);
+    console.log(`🛠️ Creating Business Tool graph with OpenAI summaries for page ${pageId} with text "${text}"`);
+    console.log(`🤖 OpenAI status: ${isOpenAIEnabled ? 'ENABLED' : 'DISABLED'}`);
 
-    // Fetch the page title first
     const pageTitle = await fetchNotionPageTitle(pageId);
     console.log(`📖 Using page title: "${pageTitle}"`);
 
     const toggleStructure = await fetchToggleBlockStructure({ pageId, text });
     console.log(`✅ Toggle structure extracted in ${Date.now() - startTime}ms`);
     
-    // PASS PAGE TITLE TO TRANSFORM FUNCTION
     const graphData = await transformToggleToReactFlow(toggleStructure.result, layoutConfig, pageTitle);
-    console.log(`✅ Graph transformed with sibling sorting and OpenAI summaries: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges`);
+    console.log(`✅ Graph transformed: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges`);
+    console.log(`🤖 AI summaries created: ${graphData.metadata.aiSummaryCount || 0}`);
     
     const cleanedGraphData = sanitizeGraphData(graphData);
 
@@ -1389,7 +1363,6 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
     console.log(`🔗 Generated graph URL: ${graphUrl}`);
 
     try {
-      // Use the page title in the heading that gets added to Notion
       const graphTitle = `🛠️ Business Tool: ${pageTitle}`;
       const appendResult = await appendGraphToNotionPage(pageId, graphUrl, graphTitle);
       console.log(`✅ Graph successfully added to Notion page`);
@@ -1410,10 +1383,11 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
           layoutConfig: cleanedGraphData.metadata.layout,
           algorithm: 'sibling-sorting-post-processing',
           siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied,
-          smartSummariesEnabled: cleanedGraphData.metadata.openAIEnabled
+          smartSummariesEnabled: cleanedGraphData.metadata.openAIEnabled,
+          aiSummaryCount: cleanedGraphData.metadata.aiSummaryCount || 0
         },
         notionResult: appendResult,
-        message: `✅ Business Tool graph created for "${pageTitle}" with sibling sorting and ${isOpenAIEnabled ? 'OpenAI' : 'fallback'} summaries! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'}`
+        message: `✅ Business Tool graph created for "${pageTitle}" with ${isOpenAIEnabled ? 'OpenAI' : 'fallback'} summaries! ${cleanedGraphData.metadata.aiSummaryCount || 0} AI summaries generated.`
       });
       
     } catch (notionError) {
@@ -1435,10 +1409,11 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
           layoutConfig: cleanedGraphData.metadata.layout,
           algorithm: 'sibling-sorting-post-processing',
           siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied,
-          smartSummariesEnabled: cleanedGraphData.metadata.openAIEnabled
+          smartSummariesEnabled: cleanedGraphData.metadata.openAIEnabled,
+          aiSummaryCount: cleanedGraphData.metadata.aiSummaryCount || 0
         },
         warning: `Graph created but failed to add to Notion page: ${notionError.message}`,
-        message: `⚠️ Business Tool graph created for "${pageTitle}" with sibling sorting and ${isOpenAIEnabled ? 'OpenAI' : 'fallback'} summaries but couldn't add to Notion page.`
+        message: `⚠️ Business Tool graph created for "${pageTitle}" with ${isOpenAIEnabled ? 'OpenAI' : 'fallback'} summaries but couldn't add to Notion page.`
       });
     }
 
@@ -1467,197 +1442,6 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
   }
 });
 
-app.post('/api/quick-test', async (req, res) => {
-  try {
-    const testPageId = '2117432eb8438055a473fc7198dc3fdc';
-    const testText = 'Business Tool';
-    
-    console.log('🧪 Running quick test with sibling sorting and OpenAI summaries...');
-    
-    const createResponse = await fetch(`${req.protocol}://${req.get('host')}/api/create-business-tool-graph`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pageId: testPageId, text: testText })
-    });
-
-    const data = await createResponse.json();
-    
-    res.json({
-      ...data,
-      testMode: true,
-      testType: 'businessTool',
-      platform: 'vercel',
-      firebase: isFirebaseEnabled ? 'enabled' : 'memory-fallback',
-      openai: isOpenAIEnabled ? 'enabled' : 'fallback',
-      algorithm: 'sibling-sorting-post-processing'
-    });
-
-  } catch (error) {
-    console.error('❌ Quick test error:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      testMode: true,
-      testType: 'businessTool',
-      platform: 'vercel',
-      openai: isOpenAIEnabled ? 'enabled' : 'fallback'
-    });
-  }
-});
-
-app.post('/api/graph-structure', async (req, res) => {
-  const startTime = Date.now();
-  
-  try {
-    const { pageId, text } = req.body;
-
-    if (!pageId || !text) {
-      return res.status(400).json({
-        error: 'Missing required parameters: pageId and text'
-      });
-    }
-
-    console.log(`📊 Extracting graph structure for page ${pageId} with text "${text}"`);
-
-    const toggleStructure = await fetchToggleBlockStructure({ pageId, text });
-    console.log(`✅ Toggle structure extracted in ${Date.now() - startTime}ms`);
-    
-    const nodes = [];
-    let nodeIdCounter = 1;
-    
-    async function extractStructure(block, parentId = null, level = 0) {
-      if (!block.content || block.content.trim() === '' || block.content === '—') {
-        if (block.children && Array.isArray(block.children)) {
-          for (const child of block.children) {
-            await extractStructure(child, parentId, level);
-          }
-        }
-        return null;
-      }
-      
-      const content = block.content.trim();
-      let nodeType = null;
-      
-      if (level === 0 && content.includes('Business ECP:')) {
-        nodeType = 'businessECP';
-      } else if (level === 0 && /Business\s*Tool/i.test(content)) {
-        nodeType = 'businessTool';
-      } else if (/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(content)) {
-        nodeType = 'condition';
-      } else if (/←\s*Policy\s*:/.test(content)) {
-        nodeType = 'policy';
-      } else if (/←\s*Event/.test(content)) {
-        nodeType = 'event';
-      } else if (/←\s*JSON\s*Code/.test(content)) {
-        nodeType = 'jsonCode';
-      }
-      
-      if (nodeType) {
-        const nodeData = {
-          id: String(nodeIdCounter++),
-          type: nodeType,
-          title: content,
-          level: level,
-          parentId: parentId,
-          notionBlockId: block.id
-        };
-        
-        // For policies and events, extract content and generate summary
-        if ((nodeType === 'policy' || nodeType === 'event') && block.children && Array.isArray(block.children)) {
-          const contentBlocks = [];
-          
-          for (const child of block.children) {
-            if (child.content && child.content.trim() !== '' && child.content !== '—') {
-              const childContent = child.content.trim();
-              
-              if (!/←\s*Policy\s*:/.test(childContent) && 
-                  !/←\s*Event/.test(childContent) &&
-                  !/←\s*JSON\s*Code/.test(childContent) &&
-                  !/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(childContent)) {
-                
-                contentBlocks.push(childContent);
-                
-                if (child.children && Array.isArray(child.children)) {
-                  const collectNestedContent = (nestedBlock) => {
-                    if (nestedBlock.content && nestedBlock.content.trim() !== '' && nestedBlock.content !== '—') {
-                      const nestedContent = nestedBlock.content.trim();
-                      if (!/←\s*Policy\s*:/.test(nestedContent) && 
-                          !/←\s*Event/.test(nestedContent) &&
-                          !/←\s*JSON\s*Code/.test(nestedContent) &&
-                          !/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(nestedContent)) {
-                        contentBlocks.push(nestedContent);
-                      }
-                    }
-                    if (nestedBlock.children && Array.isArray(nestedBlock.children)) {
-                      nestedBlock.children.forEach(collectNestedContent);
-                    }
-                  };
-                  child.children.forEach(collectNestedContent);
-                }
-              }
-            }
-          }
-          
-          if (contentBlocks.length > 0) {
-            const fullContent = contentBlocks.join('\n\n');
-            nodeData.originalContent = fullContent;
-            
-            // Generate smart summary
-            const summary = await generateSmartSummary(fullContent, nodeType);
-            nodeData.smartSummary = summary;
-            nodeData.summaryMethod = isOpenAIEnabled ? 'OpenAI' : 'Fallback';
-          }
-        }
-        
-        nodes.push(nodeData);
-        
-        if (block.children && Array.isArray(block.children)) {
-          for (const child of block.children) {
-            await extractStructure(child, nodeData.id, level + 1);
-          }
-        }
-        
-        return nodeData.id;
-      } else {
-        if (block.children && Array.isArray(block.children)) {
-          for (const child of block.children) {
-            await extractStructure(child, parentId, level);
-          }
-        }
-        return null;
-      }
-    }
-    
-    const parsedStructure = JSON.parse(toggleStructure.result);
-    await extractStructure(parsedStructure.toggleBlock);
-    
-    console.log(`✅ Simplified structure created: ${nodes.length} nodes`);
-
-    res.json({
-      results: nodes,
-      resultsJson: JSON.stringify(nodes, null, 2),
-      algorithm: 'sibling-sorting-post-processing',
-      openai: isOpenAIEnabled ? 'enabled' : 'fallback',
-      smartSummariesGenerated: nodes.filter(n => n.smartSummary).length
-    });
-
-  } catch (error) {
-    console.error('❌ Error extracting graph structure:', error);
-    
-    let errorMessage = error.message;
-    if (error.message.includes('No toggle')) {
-      errorMessage = `No toggle block found containing "${req.body?.text || 'N/A'}" inside any callout block`;
-    } else if (error.message.includes('No callout')) {
-      errorMessage = 'No callout blocks found in the page. Toggle blocks must be inside callout blocks.';
-    }
-
-    res.status(500).json({
-      error: errorMessage,
-      openai: isOpenAIEnabled ? 'enabled' : 'fallback'
-    });
-  }
-});
-
 module.exports = app;
 
 if (require.main === module) {
@@ -1666,7 +1450,7 @@ if (require.main === module) {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`🔥 Firebase: ${isFirebaseEnabled ? 'Enabled' : 'Memory fallback'}`);
     console.log(`📝 Notion: ${NOTION_TOKEN ? 'Configured' : 'Missing'}`);
-    console.log(`🤖 OpenAI: ${isOpenAIEnabled ? 'Enabled (GPT-3.5 Turbo)' : 'Fallback summaries'}`);
+    console.log(`🤖 OpenAI: ${isOpenAIEnabled ? 'ENABLED (GPT-3.5 Turbo)' : 'DISABLED - Fallback summaries'}`);
     console.log(`🏢 Business ECP support: Enabled`);
     console.log(`🛠️ Business Tool support: Enabled`);
     console.log(`📊 Graph structure extraction: Enabled`);
@@ -1674,5 +1458,9 @@ if (require.main === module) {
     console.log(`💡 Smart summaries: ${isOpenAIEnabled ? 'OpenAI GPT-3.5' : 'Rule-based fallback'}`);
     console.log(`📐 Default layout config:`, LAYOUT_CONFIG);
     console.log(`🔧 Algorithm: sibling-sorting-post-processing`);
+    
+    if (!isOpenAIEnabled) {
+      console.log(`\n⚠️  IMPORTANT: Set OPENAI_API_KEY environment variable to enable AI summaries!`);
+    }
   });
 }
