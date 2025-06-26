@@ -137,6 +137,37 @@ Event/Process: ${eventContent}
   }
 }
 
+async function humanizeCondition(conditionContent) {
+  try {
+    console.log(`🤖 Humanizing condition: ${conditionContent.substring(0, 100)}...`);
+    
+    const prompt = `Convert this technical condition into simple, human-readable language that non-technical people can understand. Remove technical jargon and explain what the condition means in plain English. Keep it concise (1-10 words).
+
+Technical condition: ${conditionContent}
+
+Human-readable condition:`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      max_tokens: 100,
+      temperature: 0.3
+    });
+
+    const humanizedText = completion.choices[0].message.content.trim();
+    console.log(`✅ Humanized condition: "${humanizedText}"`);
+    return humanizedText;
+  } catch (error) {
+    console.error('❌ Error humanizing condition:', error);
+    return conditionContent; // Return original if AI fails
+  }
+}
+
 // ===== LAYOUT CONFIGURATION =====
 const LAYOUT_CONFIG = {
   NODE_WIDTH: 200,           
@@ -645,7 +676,7 @@ function applySiblingSortingLayer(graphData, cfg = {}) {
 }
 
 // ===== LAYOUT TRANSFORMATION WITH AI TITLES =====
-async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}, pageTitle = null) {
+async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}, pageTitle = null, humanizeConditions = false) {
   const config = { ...LAYOUT_CONFIG, ...customConfig };
   
   const {
@@ -657,6 +688,7 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
 
   console.log(`🔧 Using layout configuration:`, config);
   console.log(`📖 Using page title: "${pageTitle}"`);
+  console.log(`🤖 Humanize conditions: ${humanizeConditions}`);
   
   const toggleStructure = JSON.parse(toggleStructureJson);
   const nodes = [];
@@ -747,6 +779,18 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
       } else {
         const match2 = content.match(/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition\s+(.+)/);
         if (match2) title = match2[1].trim();
+      }
+      
+      // Humanize condition if requested
+      if (humanizeConditions && title && title.length > 10) {
+        console.log(`🤖 Humanizing condition: "${title}"`);
+        try {
+          const humanizedTitle = await humanizeCondition(title);
+          console.log(`✅ Humanized condition: "${title}" -> "${humanizedTitle}"`);
+          return humanizedTitle;
+        } catch (error) {
+          console.error('❌ Failed to humanize condition, using original');
+        }
       }
     } else if (type === 'policy') {
       // For policies, use AI to generate title from content
@@ -865,12 +909,24 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
     let aiGenerated = false;
     let originalToggleTitle = content;
     let extractedContent = '';
+    let humanizedCondition = false;
     
     if (nodeType === 'policy' || nodeType === 'event') {
       extractedContent = extractContentFromBlock(block);
       if (extractedContent && extractedContent.length > 10) {
         aiGenerated = true;
         console.log(`🤖 AI-generated title for ${nodeType}: "${title}" from content: "${extractedContent.substring(0, 100)}..."`);
+      }
+    } else if (nodeType === 'condition' && humanizeConditions) {
+      // Check if condition was humanized
+      const originalConditionMatch = content.match(/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition\s*\(→\s*(.+?)\s*←\)/);
+      const originalCondition = originalConditionMatch ? originalConditionMatch[1].trim() : content;
+      
+      if (originalCondition !== title) {
+        humanizedCondition = true;
+        aiGenerated = true;
+        extractedContent = originalCondition;
+        console.log(`🤖 Humanized condition: "${originalCondition}" -> "${title}"`);
       }
     }
     
@@ -889,7 +945,8 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
       // Additional AI metadata
       aiGenerated: aiGenerated,
       originalToggleTitle: originalToggleTitle,
-      extractedContent: extractedContent
+      extractedContent: extractedContent,
+      humanizedCondition: humanizedCondition || false
     };
     
     allNodes.set(nodeId, nodeData);
@@ -920,7 +977,9 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
       });
     }
     
-    console.log(`✅ Created ${nodeType} node: ${title} ${aiGenerated ? '(AI-generated)' : '(manual)'}`);
+    const humanizedTag = humanizedCondition ? ' (humanized)' : '';
+    const aiTag = aiGenerated ? ' (AI-generated)' : ' (manual)';
+    console.log(`✅ Created ${nodeType} node: ${title}${humanizedTag}${aiTag}`);
     
     if (block.children && Array.isArray(block.children)) {
       for (const child of block.children) {
@@ -979,7 +1038,8 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
         // Include AI metadata
         aiGenerated: nodeData.aiGenerated || false,
         originalToggleTitle: nodeData.originalToggleTitle || nodeData.originalContent,
-        extractedContent: nodeData.extractedContent || ''
+        extractedContent: nodeData.extractedContent || '',
+        humanizedCondition: nodeData.humanizedCondition || false
       },
       type: 'custom',
       style: {
@@ -1019,7 +1079,8 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
         algorithm: 'post-processing-sibling-grouping'
       },
       pageTitle: pageTitle,
-      aiSummariesEnabled: true
+      aiSummariesEnabled: true,
+      humanizedConditions: humanizeConditions
     }
   };
   
@@ -1038,7 +1099,7 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
 
 app.get('/', (req, res) => {
   res.json({
-    message: 'Notion Graph Service - Sibling Sorting Applied + AI Summaries',
+    message: 'Notion Graph Service - Sibling Sorting Applied + AI Summaries + Humanized Conditions',
     status: 'running',
     timestamp: new Date().toISOString(),
     firebase: isFirebaseEnabled ? 'enabled' : 'disabled',
@@ -1047,12 +1108,13 @@ app.get('/', (req, res) => {
     supportedTypes: ['Business ECP', 'Business Tool', 'Conditions', 'Policies', 'Events', 'JSON Code'],
     layoutConfig: LAYOUT_CONFIG,
     layoutAlgorithm: 'sibling-sorting-post-processing',
-    aiFeatures: 'Policy and Event AI summaries enabled',
+    aiFeatures: 'Policy and Event AI summaries + Humanized conditions enabled',
     endpoints: [
       'GET /health',
       'POST /api/create-graph',
       'POST /api/create-business-tool-graph',
       'GET /api/graph-data/:pageId',
+      'GET /api/graph-data/:pageId/humanized',
       'POST /api/regenerate-ai-titles/:pageId',
       'POST /api/update-layout-config',
       'GET /api/layout-config'
@@ -1073,7 +1135,7 @@ app.get('/health', (req, res) => {
     supportedGraphTypes: ['businessECP', 'businessTool'],
     layoutConfig: LAYOUT_CONFIG,
     layoutAlgorithm: 'sibling-sorting-post-processing',
-    aiFeatures: 'Policy and Event AI summaries enabled'
+    aiFeatures: 'Policy and Event AI summaries + Humanized conditions enabled'
   });
 });
 
@@ -1095,7 +1157,7 @@ app.post('/api/update-layout-config', (req, res) => {
       message: 'Layout configuration updated successfully',
       currentConfig: LAYOUT_CONFIG,
       algorithm: 'sibling-sorting-post-processing',
-      aiFeatures: 'Policy and Event AI summaries enabled'
+      aiFeatures: 'Policy and Event AI summaries + Humanized conditions enabled'
     });
   } catch (error) {
     res.status(500).json({
@@ -1110,14 +1172,14 @@ app.get('/api/layout-config', (req, res) => {
     success: true,
     config: LAYOUT_CONFIG,
     algorithm: 'sibling-sorting-post-processing',
-    aiFeatures: 'Policy and Event AI summaries enabled'
+    aiFeatures: 'Policy and Event AI summaries + Humanized conditions enabled'
   });
 });
 
 app.get('/api/graph-data/:pageId', async (req, res) => {
   try {
     const { pageId } = req.params;
-    console.log(`📡 Fetching graph data for: ${pageId}`);
+    console.log(`📡 Fetching technical graph data for: ${pageId}`);
     
     const graphData = await getGraphFromFirestore(pageId);
 
@@ -1150,6 +1212,7 @@ app.get('/api/graph-data/:pageId', async (req, res) => {
     res.json({
       success: true,
       pageId,
+      graphType: 'technical',
       storage: graphData.storage || (isFirebaseEnabled ? 'firebase' : 'memory'),
       hasAITitles: hasAITitles,
       aiGeneratedCount: aiGeneratedNodes.length,
@@ -1157,6 +1220,99 @@ app.get('/api/graph-data/:pageId', async (req, res) => {
     });
   } catch (error) {
     console.error('❌ Error serving graph data:', error);
+    res.status(500).json({
+      error: 'Internal server error',
+      details: error.message,
+      platform: 'vercel'
+    });
+  }
+});
+
+// New endpoint for humanized graph data
+app.get('/api/graph-data/:pageId/humanized', async (req, res) => {
+  try {
+    const { pageId } = req.params;
+    console.log(`📡 Fetching/creating humanized graph data for: ${pageId}`);
+    
+    // Check if humanized version already exists
+    const humanizedPageId = `${pageId}-humanized`;
+    let humanizedGraphData = await getGraphFromFirestore(humanizedPageId);
+
+    if (humanizedGraphData) {
+      console.log(`✅ Found existing humanized graph: ${humanizedPageId}`);
+      res.json({
+        success: true,
+        pageId: humanizedPageId,
+        graphType: 'humanized',
+        storage: humanizedGraphData.storage || (isFirebaseEnabled ? 'firebase' : 'memory'),
+        hasAITitles: humanizedGraphData.metadata?.aiSummariesEnabled,
+        aiGeneratedCount: humanizedGraphData.nodes?.filter(node => node.data?.aiGenerated).length || 0,
+        ...humanizedGraphData
+      });
+      return;
+    }
+
+    // If humanized version doesn't exist, create it from the original
+    console.log(`🤖 Creating humanized version from original graph...`);
+    
+    // First, get the original graph data to extract the toggle structure
+    const originalGraphData = await getGraphFromFirestore(pageId);
+    if (!originalGraphData) {
+      return res.status(404).json({
+        error: 'Original graph not found',
+        pageId: pageId
+      });
+    }
+
+    // Extract original page info
+    const originalPageId = pageId.replace(/^(ecp-|tool-)/, '').replace(/-\d+$/, '');
+    const pageTitle = await fetchNotionPageTitle(originalPageId);
+    
+    // Determine the search text based on graph type
+    let searchText = 'Business ECP';
+    if (pageId.startsWith('tool-') || originalGraphData.metadata?.nodeTypes?.businessTool > 0) {
+      searchText = 'Business Tool';
+    }
+
+    // Re-fetch and process with humanization enabled
+    const toggleStructure = await fetchToggleBlockStructure({ 
+      pageId: originalPageId, 
+      text: searchText 
+    });
+    
+    const humanizedGraph = await transformToggleToReactFlow(
+      toggleStructure.result, 
+      {}, 
+      pageTitle, 
+      true // Enable humanization
+    );
+    
+    const cleanedHumanizedData = sanitizeGraphData(humanizedGraph);
+    
+    // Save the humanized version
+    await saveGraphToFirestore(humanizedPageId, cleanedHumanizedData);
+    console.log(`✅ Humanized graph created and stored: ${humanizedPageId}`);
+
+    const humanizedNodes = cleanedHumanizedData.nodes?.filter(node => 
+      node.data?.humanizedCondition
+    ) || [];
+    
+    console.log(`🤖 Created ${humanizedNodes.length} humanized condition nodes`);
+
+    res.json({
+      success: true,
+      pageId: humanizedPageId,
+      graphType: 'humanized',
+      storage: isFirebaseEnabled ? 'firebase' : 'memory',
+      hasAITitles: cleanedHumanizedData.metadata?.aiSummariesEnabled,
+      aiGeneratedCount: cleanedHumanizedData.nodes?.filter(node => node.data?.aiGenerated).length || 0,
+      humanizedCount: humanizedNodes.length,
+      message: `Created humanized graph with ${humanizedNodes.length} humanized conditions`,
+      ...cleanedHumanizedData
+    });
+
+  } catch (error) {
+    console.error('❌ Error serving/creating humanized graph data:', error);
     res.status(500).json({
       error: 'Internal server error',
       details: error.message,
@@ -1320,114 +1476,6 @@ app.post('/api/create-graph', async (req, res) => {
           aiSummariesEnabled: cleanedGraphData.metadata.aiSummariesEnabled
         },
         notionResult: appendResult,
-        message: `✅ Business ECP graph created for "${pageTitle}" with sibling sorting and AI summaries! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'}`
-      });
-      
-    } catch (notionError) {
-      console.error('❌ Failed to add graph to Notion page:', notionError);
-      
-      res.json({
-        success: true,
-        graphUrl: graphUrl,
-        graphId: uniquePageId,
-        graphType: 'businessECP',
-        pageTitle: pageTitle,
-        stats: {
-          nodes: cleanedGraphData.nodes.length,
-          edges: cleanedGraphData.edges.length,
-          nodeTypes: cleanedGraphData.metadata.nodeTypes,
-          storage: isFirebaseEnabled ? 'firebase' : 'memory',
-          processingTimeMs: Date.now() - startTime,
-          layoutConfig: cleanedGraphData.metadata.layout,
-          algorithm: 'sibling-sorting-post-processing',
-          siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied,
-          aiSummariesEnabled: cleanedGraphData.metadata.aiSummariesEnabled
-        },
-        warning: `Graph created but failed to add to Notion page: ${notionError.message}`,
-        message: `⚠️ Business ECP graph created for "${pageTitle}" with sibling sorting and AI summaries but couldn't add to Notion page.`
-      });
-    }
-
-  } catch (error) {
-    console.error('❌ Error creating Business ECP graph:', error);
-    
-    let errorMessage = error.message;
-    if (error.message.includes('No toggle')) {
-      errorMessage = `No toggle block found containing "${req.body?.text || 'N/A'}" inside any callout block`;
-    } else if (error.message.includes('No callout')) {
-      errorMessage = 'No callout blocks found in the page. Toggle blocks must be inside callout blocks.';
-    } else if (error.message.includes('timed out')) {
-      errorMessage = 'Request timed out - the toggle structure is too complex';
-    } else if (error.message.includes('Failed to fetch page')) {
-      errorMessage = 'Could not access the Notion page. Check the page ID and permissions.';
-    }
-
-    res.status(500).json({
-      success: false,
-      error: errorMessage,
-      graphType: 'businessECP',
-      platform: 'vercel',
-      processingTimeMs: Date.now() - startTime
-    });
-  }
-});
-
-app.post('/api/create-business-tool-graph', async (req, res) => {
-  const startTime = Date.now();
-  
-  try {
-    const { pageId, text = 'Business Tool', layoutConfig } = req.body;
-
-    if (!pageId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Missing required parameter: pageId'
-      });
-    }
-
-    console.log(`🛠️ Creating Business Tool graph with sibling sorting and AI summaries for page ${pageId} with text "${text}"`);
-
-    const pageTitle = await fetchNotionPageTitle(pageId);
-    console.log(`📖 Using page title: "${pageTitle}"`);
-
-    const toggleStructure = await fetchToggleBlockStructure({ pageId, text });
-    console.log(`✅ Toggle structure extracted in ${Date.now() - startTime}ms`);
-    
-    const graphData = await transformToggleToReactFlow(toggleStructure.result, layoutConfig, pageTitle);
-    console.log(`✅ Graph transformed with sibling sorting and AI summaries: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges`);
-    
-    const cleanedGraphData = sanitizeGraphData(graphData);
-
-    const uniquePageId = `tool-${pageId}-${Date.now()}`;
-    await saveGraphToFirestore(uniquePageId, cleanedGraphData);
-    console.log(`✅ Graph stored with ID: ${uniquePageId}`);
-
-    const graphUrl = generateGraphUrl(uniquePageId);
-    console.log(`🔗 Generated graph URL: ${graphUrl}`);
-
-    try {
-      const graphTitle = `🛠️ Business Tool: ${pageTitle}`;
-      const appendResult = await appendGraphToNotionPage(pageId, graphUrl, graphTitle);
-      console.log(`✅ Graph successfully added to Notion page`);
-      
-      res.json({
-        success: true,
-        graphUrl: graphUrl,
-        graphId: uniquePageId,
-        graphType: 'businessTool',
-        pageTitle: pageTitle,
-        stats: {
-          nodes: cleanedGraphData.nodes.length,
-          edges: cleanedGraphData.edges.length,
-          nodeTypes: cleanedGraphData.metadata.nodeTypes,
-          storage: isFirebaseEnabled ? 'firebase' : 'memory',
-          processingTimeMs: Date.now() - startTime,
-          layoutConfig: cleanedGraphData.metadata.layout,
-          algorithm: 'sibling-sorting-post-processing',
-          siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied,
-          aiSummariesEnabled: cleanedGraphData.metadata.aiSummariesEnabled
-        },
-        notionResult: appendResult,
         message: `✅ Business Tool graph created for "${pageTitle}" with sibling sorting and AI summaries! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'}`
       });
       
@@ -1502,7 +1550,7 @@ app.post('/api/quick-test', async (req, res) => {
       platform: 'vercel',
       firebase: isFirebaseEnabled ? 'enabled' : 'memory-fallback',
       algorithm: 'sibling-sorting-post-processing',
-      aiFeatures: 'Policy and Event AI summaries enabled'
+      aiFeatures: 'Policy and Event AI summaries + Humanized conditions enabled'
     });
 
   } catch (error) {
@@ -1642,7 +1690,7 @@ app.post('/api/graph-structure', async (req, res) => {
       results: nodes,
       resultsJson: JSON.stringify(nodes, null, 2),
       algorithm: 'sibling-sorting-post-processing',
-      aiFeatures: 'Policy and Event AI summaries enabled'
+      aiFeatures: 'Policy and Event AI summaries + Humanized conditions enabled'
     });
 
   } catch (error) {
@@ -1669,12 +1717,12 @@ if (require.main === module) {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`🔥 Firebase: ${isFirebaseEnabled ? 'Enabled' : 'Memory fallback'}`);
     console.log(`📝 Notion: ${NOTION_TOKEN ? 'Configured' : 'Missing'}`);
-    console.log(`🤖 OpenAI: Configured for AI summaries`);
+    console.log(`🤖 OpenAI: Configured for AI summaries and humanized conditions`);
     console.log(`🏢 Business ECP support: Enabled`);
     console.log(`🛠️ Business Tool support: Enabled`);
     console.log(`📊 Graph structure extraction: Enabled`);
     console.log(`🎯 Sibling sorting post-processing: Active`);
-    console.log(`🧠 AI Features: Policy and Event summaries enabled`);
+    console.log(`🧠 AI Features: Policy and Event summaries + Humanized conditions enabled`);
     console.log(`📐 Default layout config:`, LAYOUT_CONFIG);
     console.log(`🔧 Algorithm: sibling-sorting-post-processing`);
   });
