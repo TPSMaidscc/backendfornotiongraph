@@ -591,7 +591,7 @@ function applySiblingSortingLayer(graphData, cfg = {}) {
 
 
 // ===== LAYOUT TRANSFORMATION WITH SIBLING SORTING =====
-function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
+function transformToggleToReactFlow(toggleStructureJson, customConfig = {}, pageTitle = null) {
   const config = { ...LAYOUT_CONFIG, ...customConfig };
   
   const {
@@ -605,6 +605,7 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
   } = config;
 
   console.log(`🔧 Using layout configuration:`, config);
+  console.log(`📖 Using page title: "${pageTitle}"`);
   
   const toggleStructure = JSON.parse(toggleStructureJson);
   const nodes = [];
@@ -639,15 +640,27 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
     return /←\s*JSON\s*Code/.test(content);
   }
   
-  function extractTitle(content, type) {
+  function extractTitle(content, type, pageTitle = null) {
     let title = content;
     
     if (type === 'businessECP') {
-      title = content.replace(/Business ECP:\s*\(?\s*→?\s*/, '').replace(/\s*←?\s*\)?\s*.*$/, '').trim();
-      if (!title || title.includes('Type')) title = 'ECP Name';
+      // Use the page title for Business ECP root nodes
+      if (pageTitle) {
+        title = pageTitle;
+        console.log(`✅ Using page title for Business ECP: "${title}"`);
+      } else {
+        title = content.replace(/Business ECP:\s*\(?\s*→?\s*/, '').replace(/\s*←?\s*\)?\s*.*$/, '').trim();
+        if (!title || title.includes('Type')) title = 'ECP Name';
+      }
     } else if (type === 'businessTool') {
-      title = content.replace(/Business\s*Tool\s*:?\s*/i, '').trim();
-      if (!title) title = 'Tool';
+      // Use the page title for Business Tool root nodes
+      if (pageTitle) {
+        title = pageTitle;
+        console.log(`✅ Using page title for Business Tool: "${title}"`);
+      } else {
+        title = content.replace(/Business\s*Tool\s*:?\s*/i, '').trim();
+        if (!title) title = 'Tool';
+      }
     } else if (type === 'condition') {
       const match = content.match(/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition\s*\(→\s*(.+?)\s*←\)/);
       if (match) {
@@ -734,7 +747,10 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
     }
     
     const nodeId = String(nodeIdCounter++);
-    const title = extractTitle(content, nodeType);
+    
+    // Pass pageTitle only for root level business nodes (level 0)
+    const shouldUsePageTitle = level === 0 && (nodeType === 'businessECP' || nodeType === 'businessTool');
+    const title = extractTitle(content, nodeType, shouldUsePageTitle ? pageTitle : null);
     
     const nodeData = {
       id: nodeId,
@@ -871,7 +887,8 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}) {
         ...config,
         type: 'consecutiveSiblingsWithSorting',
         algorithm: 'post-processing-sibling-grouping'
-      }
+      },
+      pageTitle: pageTitle  // Include page title in metadata
     }
   };
   
@@ -1012,7 +1029,8 @@ app.post('/api/create-graph', async (req, res) => {
     const toggleStructure = await fetchToggleBlockStructure({ pageId, text });
     console.log(`✅ Toggle structure extracted in ${Date.now() - startTime}ms`);
     
-    const graphData = transformToggleToReactFlow(toggleStructure.result, layoutConfig);
+    // PASS PAGE TITLE TO TRANSFORM FUNCTION
+    const graphData = transformToggleToReactFlow(toggleStructure.result, layoutConfig, pageTitle);
     console.log(`✅ Graph transformed with sibling sorting: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges`);
     
     const cleanedGraphData = sanitizeGraphData(graphData);
@@ -1025,7 +1043,7 @@ app.post('/api/create-graph', async (req, res) => {
     console.log(`🔗 Generated graph URL: ${graphUrl}`);
 
     try {
-      // Use the page title instead of the search text
+      // Use the page title in the heading that gets added to Notion
       const graphTitle = `🏢 Business ECP: ${pageTitle}`;
       const appendResult = await appendGraphToNotionPage(pageId, graphUrl, graphTitle);
       console.log(`✅ Graph successfully added to Notion page`);
@@ -1035,7 +1053,7 @@ app.post('/api/create-graph', async (req, res) => {
         graphUrl: graphUrl,
         graphId: uniquePageId,
         graphType: 'businessECP',
-        pageTitle: pageTitle, // Include the page title in response
+        pageTitle: pageTitle,
         stats: {
           nodes: cleanedGraphData.nodes.length,
           edges: cleanedGraphData.edges.length,
@@ -1058,7 +1076,7 @@ app.post('/api/create-graph', async (req, res) => {
         graphUrl: graphUrl,
         graphId: uniquePageId,
         graphType: 'businessECP',
-        pageTitle: pageTitle, // Include the page title in response
+        pageTitle: pageTitle,
         stats: {
           nodes: cleanedGraphData.nodes.length,
           edges: cleanedGraphData.edges.length,
@@ -1092,6 +1110,115 @@ app.post('/api/create-graph', async (req, res) => {
       success: false,
       error: errorMessage,
       graphType: 'businessECP',
+      platform: 'vercel',
+      processingTimeMs: Date.now() - startTime
+    });
+  }
+});
+
+app.post('/api/create-business-tool-graph', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    const { pageId, text = 'Business Tool', layoutConfig } = req.body;
+
+    if (!pageId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required parameter: pageId'
+      });
+    }
+
+    console.log(`🛠️ Creating Business Tool graph with sibling sorting for page ${pageId} with text "${text}"`);
+
+    // Fetch the page title first
+    const pageTitle = await fetchNotionPageTitle(pageId);
+    console.log(`📖 Using page title: "${pageTitle}"`);
+
+    const toggleStructure = await fetchToggleBlockStructure({ pageId, text });
+    console.log(`✅ Toggle structure extracted in ${Date.now() - startTime}ms`);
+    
+    // PASS PAGE TITLE TO TRANSFORM FUNCTION
+    const graphData = transformToggleToReactFlow(toggleStructure.result, layoutConfig, pageTitle);
+    console.log(`✅ Graph transformed with sibling sorting: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges`);
+    
+    const cleanedGraphData = sanitizeGraphData(graphData);
+
+    const uniquePageId = `tool-${pageId}-${Date.now()}`;
+    await saveGraphToFirestore(uniquePageId, cleanedGraphData);
+    console.log(`✅ Graph stored with ID: ${uniquePageId}`);
+
+    const graphUrl = generateGraphUrl(uniquePageId);
+    console.log(`🔗 Generated graph URL: ${graphUrl}`);
+
+    try {
+      // Use the page title in the heading that gets added to Notion
+      const graphTitle = `🛠️ Business Tool: ${pageTitle}`;
+      const appendResult = await appendGraphToNotionPage(pageId, graphUrl, graphTitle);
+      console.log(`✅ Graph successfully added to Notion page`);
+      
+      res.json({
+        success: true,
+        graphUrl: graphUrl,
+        graphId: uniquePageId,
+        graphType: 'businessTool',
+        pageTitle: pageTitle,
+        stats: {
+          nodes: cleanedGraphData.nodes.length,
+          edges: cleanedGraphData.edges.length,
+          nodeTypes: cleanedGraphData.metadata.nodeTypes,
+          storage: isFirebaseEnabled ? 'firebase' : 'memory',
+          processingTimeMs: Date.now() - startTime,
+          layoutConfig: cleanedGraphData.metadata.layout,
+          algorithm: 'sibling-sorting-post-processing',
+          siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied
+        },
+        notionResult: appendResult,
+        message: `✅ Business Tool graph created for "${pageTitle}" with sibling sorting! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'}`
+      });
+      
+    } catch (notionError) {
+      console.error('❌ Failed to add graph to Notion page:', notionError);
+      
+      res.json({
+        success: true,
+        graphUrl: graphUrl,
+        graphId: uniquePageId,
+        graphType: 'businessTool',
+        pageTitle: pageTitle,
+        stats: {
+          nodes: cleanedGraphData.nodes.length,
+          edges: cleanedGraphData.edges.length,
+          nodeTypes: cleanedGraphData.metadata.nodeTypes,
+          storage: isFirebaseEnabled ? 'firebase' : 'memory',
+          processingTimeMs: Date.now() - startTime,
+          layoutConfig: cleanedGraphData.metadata.layout,
+          algorithm: 'sibling-sorting-post-processing',
+          siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied
+        },
+        warning: `Graph created but failed to add to Notion page: ${notionError.message}`,
+        message: `⚠️ Business Tool graph created for "${pageTitle}" with sibling sorting but couldn't add to Notion page.`
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Error creating Business Tool graph:', error);
+    
+    let errorMessage = error.message;
+    if (error.message.includes('No toggle')) {
+      errorMessage = `No toggle block found containing "${req.body?.text || 'Business Tool'}" inside any callout block`;
+    } else if (error.message.includes('No callout')) {
+      errorMessage = 'No callout blocks found in the page. Toggle blocks must be inside callout blocks.';
+    } else if (error.message.includes('timed out')) {
+      errorMessage = 'Request timed out - the toggle structure is too complex';
+    } else if (error.message.includes('Failed to fetch page')) {
+      errorMessage = 'Could not access the Notion page. Check the page ID and permissions.';
+    }
+
+    res.status(500).json({
+      success: false,
+      error: errorMessage,
+      graphType: 'businessTool',
       platform: 'vercel',
       processingTimeMs: Date.now() - startTime
     });
