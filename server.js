@@ -93,8 +93,6 @@ Policy: ${policyContent}
           content: prompt
         }
       ],
-      max_tokens: 50,
-      temperature: 0.3
     });
 
     const title = completion.choices[0].message.content.trim();
@@ -124,8 +122,6 @@ Event/Process: ${eventContent}
           content: prompt
         }
       ],
-      max_tokens: 50,
-      temperature: 0.3
     });
 
     const title = completion.choices[0].message.content.trim();
@@ -155,8 +151,6 @@ Human-readable condition:`;
           content: prompt
         }
       ],
-      max_tokens: 100,
-      temperature: 0.3
     });
 
     const humanizedText = completion.choices[0].message.content.trim();
