@@ -862,6 +862,19 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
     const shouldUsePageTitle = level === 0 && (nodeType === 'businessECP' || nodeType === 'businessTool');
     const title = await extractTitle(content, nodeType, shouldUsePageTitle ? pageTitle : null, block);
     
+    // Store additional metadata for AI-generated titles
+    let aiGenerated = false;
+    let originalToggleTitle = content;
+    let extractedContent = '';
+    
+    if (nodeType === 'policy' || nodeType === 'event') {
+      extractedContent = extractContentFromBlock(block);
+      if (extractedContent && extractedContent.length > 10) {
+        aiGenerated = true;
+        console.log(`🤖 AI-generated title for ${nodeType}: "${title}" from content: "${extractedContent.substring(0, 100)}..."`);
+      }
+    }
+    
     const nodeData = {
       id: nodeId,
       label: title,
@@ -873,7 +886,11 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
       parentId: parentId,
       width: NODE_WIDTH,
       height: NODE_HEIGHT,
-      hasChildren: false
+      hasChildren: false,
+      // Additional AI metadata
+      aiGenerated: aiGenerated,
+      originalToggleTitle: originalToggleTitle,
+      extractedContent: extractedContent
     };
     
     allNodes.set(nodeId, nodeData);
@@ -904,7 +921,7 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
       });
     }
     
-    console.log(`✅ Created ${nodeType} node: ${title}`);
+    console.log(`✅ Created ${nodeType} node: ${title} ${aiGenerated ? '(AI-generated)' : '(manual)'}`);
     
     if (block.children && Array.isArray(block.children)) {
       for (const child of block.children) {
@@ -959,7 +976,11 @@ async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}
         depth: nodeData.depth,
         width: NODE_WIDTH,
         height: NODE_HEIGHT,
-        hasChildren: nodeData.hasChildren
+        hasChildren: nodeData.hasChildren,
+        // Include AI metadata
+        aiGenerated: nodeData.aiGenerated || false,
+        originalToggleTitle: nodeData.originalToggleTitle || nodeData.originalContent,
+        extractedContent: nodeData.extractedContent || ''
       },
       type: 'custom',
       style: {
@@ -1033,6 +1054,7 @@ app.get('/', (req, res) => {
       'POST /api/create-graph',
       'POST /api/create-business-tool-graph',
       'GET /api/graph-data/:pageId',
+      'POST /api/regenerate-ai-titles/:pageId',
       'POST /api/update-layout-config',
       'GET /api/layout-config'
     ]
@@ -1108,10 +1130,30 @@ app.get('/api/graph-data/:pageId', async (req, res) => {
       });
     }
 
+    // Check if this graph has AI-generated titles
+    const hasAITitles = graphData.metadata?.aiSummariesEnabled || 
+                       graphData.nodes?.some(node => node.data?.aiGenerated);
+    
+    if (!hasAITitles) {
+      console.log(`⚠️ Graph ${pageId} was created before AI integration - titles may not be AI-generated`);
+    }
+
+    // Log AI title information for debugging
+    const aiGeneratedNodes = graphData.nodes?.filter(node => 
+      node.data?.aiGenerated && (node.data?.nodeType === 'policy' || node.data?.nodeType === 'event')
+    ) || [];
+    
+    console.log(`🤖 Found ${aiGeneratedNodes.length} AI-generated titles in graph ${pageId}`);
+    aiGeneratedNodes.forEach(node => {
+      console.log(`  - ${node.data.nodeType}: "${node.data.label}" (AI: ${node.data.aiGenerated})`);
+    });
+
     res.json({
       success: true,
       pageId,
       storage: graphData.storage || (isFirebaseEnabled ? 'firebase' : 'memory'),
+      hasAITitles: hasAITitles,
+      aiGeneratedCount: aiGeneratedNodes.length,
       ...graphData
     });
   } catch (error) {
@@ -1120,6 +1162,105 @@ app.get('/api/graph-data/:pageId', async (req, res) => {
       error: 'Internal server error',
       details: error.message,
       platform: 'vercel'
+    });
+  }
+});
+
+// New endpoint to regenerate AI titles for existing graphs
+app.post('/api/regenerate-ai-titles/:pageId', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    const { pageId } = req.params;
+    console.log(`🔄 Regenerating AI titles for graph: ${pageId}`);
+    
+    const graphData = await getGraphFromFirestore(pageId);
+
+    if (!graphData) {
+      return res.status(404).json({
+        error: 'Graph not found',
+        pageId: pageId
+      });
+    }
+
+    let updatedNodes = 0;
+    const nodes = [...graphData.nodes];
+
+    // Process each policy and event node
+    for (let i = 0; i < nodes.length; i++) {
+      const node = nodes[i];
+      
+      if (node.data?.nodeType === 'policy' || node.data?.nodeType === 'event') {
+        const originalTitle = node.data.originalToggleTitle || node.data.originalContent;
+        const extractedContent = node.data.extractedContent;
+        
+        if (extractedContent && extractedContent.length > 10) {
+          console.log(`🤖 Regenerating AI title for ${node.data.nodeType} node ${node.id}...`);
+          
+          try {
+            let newTitle;
+            if (node.data.nodeType === 'policy') {
+              newTitle = await generatePolicyTitle(extractedContent);
+            } else {
+              newTitle = await generateEventTitle(extractedContent);
+            }
+            
+            // Update the node
+            nodes[i] = {
+              ...node,
+              data: {
+                ...node.data,
+                label: newTitle,
+                cleanedContent: newTitle,
+                aiGenerated: true
+              }
+            };
+            
+            updatedNodes++;
+            console.log(`✅ Updated ${node.data.nodeType} title: "${newTitle}"`);
+            
+          } catch (error) {
+            console.error(`❌ Failed to regenerate title for node ${node.id}:`, error);
+          }
+        }
+      }
+    }
+
+    // Update the graph data
+    const updatedGraphData = {
+      ...graphData,
+      nodes: nodes,
+      metadata: {
+        ...graphData.metadata,
+        aiSummariesEnabled: true,
+        lastAIUpdate: new Date().toISOString(),
+        aiNodesUpdated: updatedNodes
+      }
+    };
+
+    // Save the updated graph
+    await saveGraphToFirestore(pageId, updatedGraphData);
+    
+    console.log(`✅ Regenerated ${updatedNodes} AI titles for graph ${pageId}`);
+
+    res.json({
+      success: true,
+      pageId: pageId,
+      message: `Successfully regenerated ${updatedNodes} AI titles`,
+      stats: {
+        nodesUpdated: updatedNodes,
+        processingTimeMs: Date.now() - startTime,
+        aiSummariesEnabled: true
+      }
+    });
+
+  } catch (error) {
+    console.error('❌ Error regenerating AI titles:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      pageId: req.params.pageId,
+      processingTimeMs: Date.now() - startTime
     });
   }
 });
