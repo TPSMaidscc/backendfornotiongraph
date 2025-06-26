@@ -140,7 +140,7 @@ async function generateSmartSummary(content, nodeType) {
         Send the refund confirmation statement to the customer.
 
         1-6-word title: "Process Taxi Refund Request"
-        `;
+         `;
 
     const completion = await openai.chat.completions.create({
       model: "o1",
