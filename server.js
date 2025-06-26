@@ -1,8 +1,7 @@
 const express = require('express');
 const { Client } = require('@notionhq/client');
 const cors = require('cors');
-const { Anthropic } = require('@anthropic-ai/sdk');
-
+const OpenAI = require('openai');
 // Initialize OpenAI
 const openai = new OpenAI({
   apiKey: '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'
