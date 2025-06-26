@@ -187,6 +187,47 @@ function generateGraphUrl(pageId) {
   return `${GRAPH_BASE_URL}?page=${pageId}`;
 }
 
+// ===== NEW FUNCTION TO FETCH PAGE TITLE =====
+async function fetchNotionPageTitle(pageId) {
+  try {
+    console.log(`📝 Fetching page title for: ${pageId}`);
+    
+    const page = await notion.pages.retrieve({ page_id: pageId });
+    
+    if (!page) {
+      throw new Error('Notion page not found or access denied');
+    }
+
+    // Extract title from different possible properties
+    let title = 'Untitled Page';
+    
+    if (page.properties) {
+      // Look for title in common property names
+      const titleProperty = page.properties.title || 
+                           page.properties.Title || 
+                           page.properties.Name || 
+                           page.properties.name ||
+                           Object.values(page.properties).find(prop => prop.type === 'title');
+      
+      if (titleProperty && titleProperty.title && titleProperty.title.length > 0) {
+        title = titleProperty.title.map(text => text.plain_text || '').join('');
+      }
+    }
+
+    // Fallback: try to get title from the page object itself
+    if (title === 'Untitled Page' && page.title) {
+      title = page.title;
+    }
+
+    console.log(`✅ Page title found: "${title}"`);
+    return title;
+    
+  } catch (error) {
+    console.error('❌ Error fetching page title:', error);
+    return 'Unknown Page'; // Fallback title
+  }
+}
+
 // ===== NOTION INTEGRATION FUNCTIONS =====
 async function appendGraphToNotionPage(notionPageId, graphUrl, graphTitle) {
   try {
@@ -260,47 +301,6 @@ async function appendGraphToNotionPage(notionPageId, graphUrl, graphTitle) {
   } catch (error) {
     console.error('❌ Error appending to Notion page:', error);
     throw new Error(`Failed to append to Notion page: ${error.message}`);
-  }
-}
-
-// Add this new function to fetch the page title
-async function fetchNotionPageTitle(pageId) {
-  try {
-    console.log(`📝 Fetching page title for: ${pageId}`);
-    
-    const page = await notion.pages.retrieve({ page_id: pageId });
-    
-    if (!page) {
-      throw new Error('Notion page not found or access denied');
-    }
-
-    // Extract title from different possible properties
-    let title = 'Untitled Page';
-    
-    if (page.properties) {
-      // Look for title in common property names
-      const titleProperty = page.properties.title || 
-                           page.properties.Title || 
-                           page.properties.Name || 
-                           page.properties.name ||
-                           Object.values(page.properties).find(prop => prop.type === 'title');
-      
-      if (titleProperty && titleProperty.title && titleProperty.title.length > 0) {
-        title = titleProperty.title.map(text => text.plain_text || '').join('');
-      }
-    }
-
-    // Fallback: try to get title from the page object itself
-    if (title === 'Untitled Page' && page.title) {
-      title = page.title;
-    }
-
-    console.log(`✅ Page title found: "${title}"`);
-    return title;
-    
-  } catch (error) {
-    console.error('❌ Error fetching page title:', error);
-    return 'Unknown Page'; // Fallback title
   }
 }
 
@@ -990,7 +990,6 @@ app.get('/api/graph-data/:pageId', async (req, res) => {
   }
 });
 
-// Update the create-graph endpoint
 app.post('/api/create-graph', async (req, res) => {
   const startTime = Date.now();
   
@@ -1099,8 +1098,6 @@ app.post('/api/create-graph', async (req, res) => {
   }
 });
 
-
-// Update the create-business-tool-graph endpoint
 app.post('/api/create-business-tool-graph', async (req, res) => {
   const startTime = Date.now();
   
