@@ -163,15 +163,18 @@ if @maidNationality == Filipina AND {{if @RenewalCase = False AND {CurrentDate} 
 Output:
 
 
-Applies to any Filipina maid whose visa renewal isn’t actively in progress—that is, it’s still within the first contract year with a newly issued (or issuing) residency visa, or the renewal workflow is marked “Not Started,” “Completed,” “Apply for R-visa,” or “Get Form from GDRFA.”
-Condition: ${conditionContent}`;
+Applies to any Filipina maid whose visa renewal isn’t actively in progress—that is, it’s still within the first contract year with a newly issued (or issuing) residency visa, or the renewal workflow is marked “Not Started,” “Completed,” “Apply for R-visa,” or “Get Form from GDRFA.”`;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4.1",
       messages: [
         {
-          role: "user",
+          role: "system",
           content: prompt
+        },
+        {
+          role:'user',
+          content:`Condition: ${conditionContent}`
         }
       ],
       max_tokens: 100,
