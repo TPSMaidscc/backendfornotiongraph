@@ -1,6 +1,7 @@
 const express = require('express');
 const { Client } = require('@notionhq/client');
 const cors = require('cors');
+const OpenAI = require('openai');
 
 // Firebase Admin SDK
 let admin = null;
@@ -40,6 +41,28 @@ try {
 } catch (error) {
   console.log('⚠️ Firebase initialization failed, using in-memory storage:', error.message);
   isFirebaseEnabled = false;
+}
+
+// OpenAI Configuration
+let openai = null;
+let isOpenAIEnabled = false;
+
+try {
+  const OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'YOUR_OPENAI_API_KEY_HERE';
+  
+  if (OPENAI_API_KEY && OPENAI_API_KEY !== 'YOUR_OPENAI_API_KEY_HERE') {
+    openai = new OpenAI({
+      apiKey: OPENAI_API_KEY
+    });
+    isOpenAIEnabled = true;
+    console.log('🤖 OpenAI initialized successfully');
+  } else {
+    console.log('⚠️ OpenAI API key not configured - using fallback summaries');
+    isOpenAIEnabled = false;
+  }
+} catch (error) {
+  console.error('❌ OpenAI initialization failed:', error.message);
+  isOpenAIEnabled = false;
 }
 
 const app = express();
@@ -83,6 +106,84 @@ const LAYOUT_CONFIG = {
 function updateLayoutConfig(newConfig) {
   Object.assign(LAYOUT_CONFIG, newConfig);
   console.log('📐 Layout configuration updated:', LAYOUT_CONFIG);
+}
+
+// ===== OPENAI FUNCTIONS =====
+async function generateSmartSummary(content, nodeType) {
+  if (!isOpenAIEnabled) {
+    console.log('⚠️ OpenAI not available, using fallback summary');
+    return generateFallbackSummary(content, nodeType);
+  }
+
+  try {
+    console.log(`🤖 Generating OpenAI summary for ${nodeType}: ${content.substring(0, 100)}...`);
+    
+    const prompt = nodeType === 'policy' 
+      ? `Summarize this business policy in 1-5 words. Focus on the main action or requirement. Content: "${content}"`
+      : `Summarize this business event in 1-5 words. Focus on the main trigger or action. Content: "${content}"`;
+
+    const completion = await openai.chat.completions.create({
+      model: "gpt-3.5-turbo",
+      messages: [
+        {
+          role: "system",
+          content: "You are a business analyst expert at creating concise summaries. Respond with only 1-5 words that capture the essence of the content. No quotes, no explanations, just the summary."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      max_tokens: 20,
+      temperature: 0.3
+    });
+
+    const summary = completion.choices[0]?.message?.content?.trim() || generateFallbackSummary(content, nodeType);
+    console.log(`✅ OpenAI summary generated: "${summary}"`);
+    return summary;
+
+  } catch (error) {
+    console.error('❌ OpenAI summarization failed:', error.message);
+    return generateFallbackSummary(content, nodeType);
+  }
+}
+
+function generateFallbackSummary(content, nodeType) {
+  console.log(`🔄 Generating fallback summary for ${nodeType}`);
+  
+  // Clean the content first
+  let cleanContent = content
+    .replace(/←\s*Policy\s*:\s*/g, '')
+    .replace(/←\s*Event\s*/g, '')
+    .replace(/\(→\s*/g, '')
+    .replace(/\s*←\)/g, '')
+    .trim();
+
+  // Remove common template text
+  cleanContent = cleanContent
+    .replace(/Type your Policy Name Here/gi, '')
+    .replace(/Policy Name/gi, '')
+    .replace(/Event Name/gi, '')
+    .trim();
+
+  if (!cleanContent || cleanContent.length === 0) {
+    return nodeType === 'policy' ? 'Policy Rule' : 'Event Trigger';
+  }
+
+  // Extract key words (first 3-5 meaningful words)
+  const words = cleanContent
+    .split(/\s+/)
+    .filter(word => word.length > 2) // Skip very short words
+    .filter(word => !/^(the|and|or|but|for|with|by|at|in|on|to|from)$/i.test(word)) // Skip common articles
+    .slice(0, 4); // Take first 4 meaningful words
+
+  if (words.length === 0) {
+    return nodeType === 'policy' ? 'Policy Rule' : 'Event Trigger';
+  }
+
+  const summary = words.join(' ');
+  console.log(`✅ Fallback summary generated: "${summary}"`);
+  return summary.length > 25 ? summary.substring(0, 22) + '...' : summary;
 }
 
 // ===== FIREBASE FUNCTIONS =====
@@ -274,7 +375,7 @@ async function appendGraphToNotionPage(notionPageId, graphUrl, graphTitle) {
             { 
               type: 'text', 
               text: { 
-                content: `Generated: ${new Date().toLocaleString()} | Storage: ${isFirebaseEnabled ? 'Firebase' : 'Memory'} | Layout: Sibling Sorting Applied` 
+                content: `Generated: ${new Date().toLocaleString()} | Storage: ${isFirebaseEnabled ? 'Firebase' : 'Memory'} | OpenAI: ${isOpenAIEnabled ? 'Enabled' : 'Fallback'} | Layout: Sibling Sorting Applied` 
               },
               annotations: {
                 color: 'gray'
@@ -589,9 +690,41 @@ function applySiblingSortingLayer(graphData, cfg = {}) {
   };
 }
 
+// ===== ENHANCED EXTRACT CONTENT FOR POLICIES AND EVENTS =====
+async function extractContentForSummary(block) {
+  if (!block.children || !Array.isArray(block.children)) {
+    return '';
+  }
 
-// ===== LAYOUT TRANSFORMATION WITH SIBLING SORTING =====
-function transformToggleToReactFlow(toggleStructureJson, customConfig = {}, pageTitle = null) {
+  const contentBlocks = [];
+  
+  const collectContent = (childBlock) => {
+    if (childBlock.content && childBlock.content.trim() !== '' && childBlock.content !== '—') {
+      const childContent = childBlock.content.trim();
+      
+      // Skip other structured content types
+      if (!/←\s*Policy\s*:/.test(childContent) && 
+          !/←\s*Event/.test(childContent) &&
+          !/←\s*JSON\s*Code/.test(childContent) &&
+          !/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(childContent)) {
+        
+        contentBlocks.push(childContent);
+      }
+    }
+    
+    // Recursively collect content from nested children
+    if (childBlock.children && Array.isArray(childBlock.children)) {
+      childBlock.children.forEach(collectContent);
+    }
+  };
+
+  block.children.forEach(collectContent);
+  
+  return contentBlocks.join('\n\n').trim();
+}
+
+// ===== LAYOUT TRANSFORMATION WITH SIBLING SORTING AND OPENAI SUMMARIES =====
+async function transformToggleToReactFlow(toggleStructureJson, customConfig = {}, pageTitle = null) {
   const config = { ...LAYOUT_CONFIG, ...customConfig };
   
   const {
@@ -606,6 +739,7 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}, page
 
   console.log(`🔧 Using layout configuration:`, config);
   console.log(`📖 Using page title: "${pageTitle}"`);
+  console.log(`🤖 OpenAI enabled: ${isOpenAIEnabled}`);
   
   const toggleStructure = JSON.parse(toggleStructureJson);
   const nodes = [];
@@ -640,7 +774,7 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}, page
     return /←\s*JSON\s*Code/.test(content);
   }
   
-  function extractTitle(content, type, pageTitle = null) {
+  async function extractTitle(content, type, pageTitle = null, block = null) {
     let title = content;
     
     if (type === 'businessECP') {
@@ -670,26 +804,68 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}, page
         if (match2) title = match2[1].trim();
       }
     } else if (type === 'policy') {
-      const match = content.match(/←\s*Policy\s*:\s*\(→\s*(.+?)\s*←\)/);
-      if (match) {
-        title = match[1].trim();
-        if (title.includes('Type your Policy Name Here')) title = 'Policy (Template)';
-      } else {
-        const match2 = content.match(/←\s*Policy\s*:\s*(.+)/);
-        if (match2) {
-          title = match2[1].trim().replace(/^\(→\s*/, '').replace(/\s*←\)$/, '');
-          if (!title || title === "Type your Policy Name Here") title = 'Policy (Empty)';
+      // FOR POLICIES: Extract content and generate smart summary
+      console.log(`🤖 Generating smart summary for policy...`);
+      
+      if (block) {
+        const policyContent = await extractContentForSummary(block);
+        if (policyContent && policyContent.trim().length > 0) {
+          console.log(`📝 Policy content found: ${policyContent.substring(0, 100)}...`);
+          title = await generateSmartSummary(policyContent, 'policy');
         } else {
-          title = 'Policy (No Title)';
+          // Fallback to title extraction
+          const match = content.match(/←\s*Policy\s*:\s*\(→\s*(.+?)\s*←\)/);
+          if (match) {
+            title = match[1].trim();
+            if (title.includes('Type your Policy Name Here')) title = 'Policy (Template)';
+          } else {
+            const match2 = content.match(/←\s*Policy\s*:\s*(.+)/);
+            if (match2) {
+              title = match2[1].trim().replace(/^\(→\s*/, '').replace(/\s*←\)$/, '');
+              if (!title || title === "Type your Policy Name Here") title = 'Policy (Empty)';
+            } else {
+              title = 'Policy (No Title)';
+            }
+          }
+        }
+      } else {
+        // Fallback when no block is provided
+        const match = content.match(/←\s*Policy\s*:\s*\(→\s*(.+?)\s*←\)/);
+        if (match) {
+          title = match[1].trim();
+          if (title.includes('Type your Policy Name Here')) title = 'Policy (Template)';
+        } else {
+          title = 'Policy (No Content)';
         }
       }
     } else if (type === 'event') {
-      if (content.match(/^\s*←\s*Event\s*$/)) {
-        title = 'Event (No Title)';
+      // FOR EVENTS: Extract content and generate smart summary
+      console.log(`🤖 Generating smart summary for event...`);
+      
+      if (block) {
+        const eventContent = await extractContentForSummary(block);
+        if (eventContent && eventContent.trim().length > 0) {
+          console.log(`📝 Event content found: ${eventContent.substring(0, 100)}...`);
+          title = await generateSmartSummary(eventContent, 'event');
+        } else {
+          // Fallback to title extraction
+          if (content.match(/^\s*←\s*Event\s*$/)) {
+            title = 'Event (No Title)';
+          } else {
+            const match = content.match(/←\s*Event\s+(.+)/);
+            if (match) title = match[1].trim();
+            else title = 'Event (Unknown)';
+          }
+        }
       } else {
-        const match = content.match(/←\s*Event\s+(.+)/);
-        if (match) title = match[1].trim();
-        else title = 'Event (Unknown)';
+        // Fallback when no block is provided
+        if (content.match(/^\s*←\s*Event\s*$/)) {
+          title = 'Event (No Content)';
+        } else {
+          const match = content.match(/←\s*Event\s+(.+)/);
+          if (match) title = match[1].trim();
+          else title = 'Event (Unknown)';
+        }
       }
     } else if (type === 'jsonCode') {
       const match = content.match(/←\s*JSON\s*Code\s*(.*)/);
@@ -704,7 +880,7 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}, page
     return title.substring(0, 50) + (title.length > 50 ? '...' : '');
   }
   
-  function createNode(block, parentId = null, level = 0) {
+  async function createNode(block, parentId = null, level = 0) {
     if (!block.content || 
         block.content.trim() === '' || 
         block.content === '—' || 
@@ -714,7 +890,7 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}, page
       
       if (block.children && Array.isArray(block.children)) {
         for (const child of block.children) {
-          createNode(child, parentId, level);
+          await createNode(child, parentId, level);
         }
       }
       return null;
@@ -740,7 +916,7 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}, page
     if (!nodeType) {
       if (block.children && Array.isArray(block.children)) {
         for (const child of block.children) {
-          createNode(child, parentId, level);
+          await createNode(child, parentId, level);
         }
       }
       return null;
@@ -750,7 +926,14 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}, page
     
     // Pass pageTitle only for root level business nodes (level 0)
     const shouldUsePageTitle = level === 0 && (nodeType === 'businessECP' || nodeType === 'businessTool');
-    const title = extractTitle(content, nodeType, shouldUsePageTitle ? pageTitle : null);
+    
+    // IMPORTANT: Pass the block object for policies and events so we can extract content
+    const title = await extractTitle(
+      content, 
+      nodeType, 
+      shouldUsePageTitle ? pageTitle : null,
+      (nodeType === 'policy' || nodeType === 'event') ? block : null
+    );
     
     const nodeData = {
       id: nodeId,
@@ -798,16 +981,16 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}, page
     
     if (block.children && Array.isArray(block.children)) {
       for (const child of block.children) {
-        createNode(child, nodeId, level + 1);
+        await createNode(child, nodeId, level + 1);
       }
     }
     
     return nodeId;
   }
   
-  console.log(`🚀 Starting layout transformation...`);
+  console.log(`🚀 Starting layout transformation with OpenAI summaries...`);
   
-  createNode(toggleStructure.toggleBlock);
+  await createNode(toggleStructure.toggleBlock);
   
   console.log(`📊 Created ${allNodes.size} nodes and ${edges.length} edges`);
   
@@ -888,7 +1071,8 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}, page
         type: 'consecutiveSiblingsWithSorting',
         algorithm: 'post-processing-sibling-grouping'
       },
-      pageTitle: pageTitle  // Include page title in metadata
+      pageTitle: pageTitle,  // Include page title in metadata
+      openAIEnabled: isOpenAIEnabled // Include OpenAI status in metadata
     }
   };
   
@@ -907,14 +1091,16 @@ function transformToggleToReactFlow(toggleStructureJson, customConfig = {}, page
 
 app.get('/', (req, res) => {
   res.json({
-    message: 'Notion Graph Service - Sibling Sorting Applied',
+    message: 'Notion Graph Service - Sibling Sorting Applied with OpenAI Summaries',
     status: 'running',
     timestamp: new Date().toISOString(),
     firebase: isFirebaseEnabled ? 'enabled' : 'disabled',
     notion: NOTION_TOKEN ? 'configured' : 'missing',
+    openai: isOpenAIEnabled ? 'enabled' : 'fallback',
     supportedTypes: ['Business ECP', 'Business Tool', 'Conditions', 'Policies', 'Events', 'JSON Code'],
     layoutConfig: LAYOUT_CONFIG,
     layoutAlgorithm: 'sibling-sorting-post-processing',
+    smartSummaries: isOpenAIEnabled ? 'OpenAI GPT-3.5' : 'Fallback Logic',
     endpoints: [
       'GET /health',
       'POST /api/create-graph',
@@ -933,11 +1119,13 @@ app.get('/health', (req, res) => {
     platform: 'vercel',
     firebase: isFirebaseEnabled ? 'connected' : 'memory-fallback',
     notion: NOTION_TOKEN ? 'configured' : 'missing',
+    openai: isOpenAIEnabled ? 'connected' : 'fallback',
     storage: isFirebaseEnabled ? 'firestore' : 'memory',
     memoryGraphs: graphStorage.size,
     supportedGraphTypes: ['businessECP', 'businessTool'],
     layoutConfig: LAYOUT_CONFIG,
-    layoutAlgorithm: 'sibling-sorting-post-processing'
+    layoutAlgorithm: 'sibling-sorting-post-processing',
+    smartSummaries: isOpenAIEnabled ? 'OpenAI GPT-3.5 Turbo' : 'Rule-based Fallback'
   });
 });
 
@@ -958,7 +1146,8 @@ app.post('/api/update-layout-config', (req, res) => {
       success: true,
       message: 'Layout configuration updated successfully',
       currentConfig: LAYOUT_CONFIG,
-      algorithm: 'sibling-sorting-post-processing'
+      algorithm: 'sibling-sorting-post-processing',
+      openai: isOpenAIEnabled ? 'enabled' : 'fallback'
     });
   } catch (error) {
     res.status(500).json({
@@ -972,7 +1161,8 @@ app.get('/api/layout-config', (req, res) => {
   res.json({
     success: true,
     config: LAYOUT_CONFIG,
-    algorithm: 'sibling-sorting-post-processing'
+    algorithm: 'sibling-sorting-post-processing',
+    openai: isOpenAIEnabled ? 'enabled' : 'fallback'
   });
 });
 
@@ -987,7 +1177,8 @@ app.get('/api/graph-data/:pageId', async (req, res) => {
       return res.status(404).json({
         error: 'Graph not found',
         pageId: pageId,
-        storage: isFirebaseEnabled ? 'firebase' : 'memory'
+        storage: isFirebaseEnabled ? 'firebase' : 'memory',
+        openai: isOpenAIEnabled ? 'enabled' : 'fallback'
       });
     }
 
@@ -995,6 +1186,7 @@ app.get('/api/graph-data/:pageId', async (req, res) => {
       success: true,
       pageId,
       storage: graphData.storage || (isFirebaseEnabled ? 'firebase' : 'memory'),
+      openai: isOpenAIEnabled ? 'enabled' : 'fallback',
       ...graphData
     });
   } catch (error) {
@@ -1002,7 +1194,8 @@ app.get('/api/graph-data/:pageId', async (req, res) => {
     res.status(500).json({
       error: 'Internal server error',
       details: error.message,
-      platform: 'vercel'
+      platform: 'vercel',
+      openai: isOpenAIEnabled ? 'enabled' : 'fallback'
     });
   }
 });
@@ -1020,7 +1213,7 @@ app.post('/api/create-graph', async (req, res) => {
       });
     }
 
-    console.log(`🏢 Creating Business ECP graph with sibling sorting for page ${pageId} with text "${text}"`);
+    console.log(`🏢 Creating Business ECP graph with sibling sorting and OpenAI summaries for page ${pageId} with text "${text}"`);
 
     // Fetch the page title first
     const pageTitle = await fetchNotionPageTitle(pageId);
@@ -1030,8 +1223,8 @@ app.post('/api/create-graph', async (req, res) => {
     console.log(`✅ Toggle structure extracted in ${Date.now() - startTime}ms`);
     
     // PASS PAGE TITLE TO TRANSFORM FUNCTION
-    const graphData = transformToggleToReactFlow(toggleStructure.result, layoutConfig, pageTitle);
-    console.log(`✅ Graph transformed with sibling sorting: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges`);
+    const graphData = await transformToggleToReactFlow(toggleStructure.result, layoutConfig, pageTitle);
+    console.log(`✅ Graph transformed with sibling sorting and OpenAI summaries: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges`);
     
     const cleanedGraphData = sanitizeGraphData(graphData);
 
@@ -1059,13 +1252,15 @@ app.post('/api/create-graph', async (req, res) => {
           edges: cleanedGraphData.edges.length,
           nodeTypes: cleanedGraphData.metadata.nodeTypes,
           storage: isFirebaseEnabled ? 'firebase' : 'memory',
+          openai: isOpenAIEnabled ? 'enabled' : 'fallback',
           processingTimeMs: Date.now() - startTime,
           layoutConfig: cleanedGraphData.metadata.layout,
           algorithm: 'sibling-sorting-post-processing',
-          siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied
+          siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied,
+          smartSummariesEnabled: cleanedGraphData.metadata.openAIEnabled
         },
         notionResult: appendResult,
-        message: `✅ Business ECP graph created for "${pageTitle}" with sibling sorting! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'}`
+        message: `✅ Business ECP graph created for "${pageTitle}" with sibling sorting and ${isOpenAIEnabled ? 'OpenAI' : 'fallback'} summaries! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'}`
       });
       
     } catch (notionError) {
@@ -1082,13 +1277,15 @@ app.post('/api/create-graph', async (req, res) => {
           edges: cleanedGraphData.edges.length,
           nodeTypes: cleanedGraphData.metadata.nodeTypes,
           storage: isFirebaseEnabled ? 'firebase' : 'memory',
+          openai: isOpenAIEnabled ? 'enabled' : 'fallback',
           processingTimeMs: Date.now() - startTime,
           layoutConfig: cleanedGraphData.metadata.layout,
           algorithm: 'sibling-sorting-post-processing',
-          siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied
+          siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied,
+          smartSummariesEnabled: cleanedGraphData.metadata.openAIEnabled
         },
         warning: `Graph created but failed to add to Notion page: ${notionError.message}`,
-        message: `⚠️ Business ECP graph created for "${pageTitle}" with sibling sorting but couldn't add to Notion page.`
+        message: `⚠️ Business ECP graph created for "${pageTitle}" with sibling sorting and ${isOpenAIEnabled ? 'OpenAI' : 'fallback'} summaries but couldn't add to Notion page.`
       });
     }
 
@@ -1111,6 +1308,7 @@ app.post('/api/create-graph', async (req, res) => {
       error: errorMessage,
       graphType: 'businessECP',
       platform: 'vercel',
+      openai: isOpenAIEnabled ? 'enabled' : 'fallback',
       processingTimeMs: Date.now() - startTime
     });
   }
@@ -1129,7 +1327,7 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
       });
     }
 
-    console.log(`🛠️ Creating Business Tool graph with sibling sorting for page ${pageId} with text "${text}"`);
+    console.log(`🛠️ Creating Business Tool graph with sibling sorting and OpenAI summaries for page ${pageId} with text "${text}"`);
 
     // Fetch the page title first
     const pageTitle = await fetchNotionPageTitle(pageId);
@@ -1139,8 +1337,8 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
     console.log(`✅ Toggle structure extracted in ${Date.now() - startTime}ms`);
     
     // PASS PAGE TITLE TO TRANSFORM FUNCTION
-    const graphData = transformToggleToReactFlow(toggleStructure.result, layoutConfig, pageTitle);
-    console.log(`✅ Graph transformed with sibling sorting: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges`);
+    const graphData = await transformToggleToReactFlow(toggleStructure.result, layoutConfig, pageTitle);
+    console.log(`✅ Graph transformed with sibling sorting and OpenAI summaries: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges`);
     
     const cleanedGraphData = sanitizeGraphData(graphData);
 
@@ -1168,13 +1366,15 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
           edges: cleanedGraphData.edges.length,
           nodeTypes: cleanedGraphData.metadata.nodeTypes,
           storage: isFirebaseEnabled ? 'firebase' : 'memory',
+          openai: isOpenAIEnabled ? 'enabled' : 'fallback',
           processingTimeMs: Date.now() - startTime,
           layoutConfig: cleanedGraphData.metadata.layout,
           algorithm: 'sibling-sorting-post-processing',
-          siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied
+          siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied,
+          smartSummariesEnabled: cleanedGraphData.metadata.openAIEnabled
         },
         notionResult: appendResult,
-        message: `✅ Business Tool graph created for "${pageTitle}" with sibling sorting! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'}`
+        message: `✅ Business Tool graph created for "${pageTitle}" with sibling sorting and ${isOpenAIEnabled ? 'OpenAI' : 'fallback'} summaries! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'}`
       });
       
     } catch (notionError) {
@@ -1191,13 +1391,15 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
           edges: cleanedGraphData.edges.length,
           nodeTypes: cleanedGraphData.metadata.nodeTypes,
           storage: isFirebaseEnabled ? 'firebase' : 'memory',
+          openai: isOpenAIEnabled ? 'enabled' : 'fallback',
           processingTimeMs: Date.now() - startTime,
           layoutConfig: cleanedGraphData.metadata.layout,
           algorithm: 'sibling-sorting-post-processing',
-          siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied
+          siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied,
+          smartSummariesEnabled: cleanedGraphData.metadata.openAIEnabled
         },
         warning: `Graph created but failed to add to Notion page: ${notionError.message}`,
-        message: `⚠️ Business Tool graph created for "${pageTitle}" with sibling sorting but couldn't add to Notion page.`
+        message: `⚠️ Business Tool graph created for "${pageTitle}" with sibling sorting and ${isOpenAIEnabled ? 'OpenAI' : 'fallback'} summaries but couldn't add to Notion page.`
       });
     }
 
@@ -1220,114 +1422,7 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
       error: errorMessage,
       graphType: 'businessTool',
       platform: 'vercel',
-      processingTimeMs: Date.now() - startTime
-    });
-  }
-});
-
-app.post('/api/create-business-tool-graph', async (req, res) => {
-  const startTime = Date.now();
-  
-  try {
-    const { pageId, text = 'Business Tool', layoutConfig } = req.body;
-
-    if (!pageId) {
-      return res.status(400).json({
-        success: false,
-        error: 'Missing required parameter: pageId'
-      });
-    }
-
-    console.log(`🛠️ Creating Business Tool graph with sibling sorting for page ${pageId} with text "${text}"`);
-
-    // Fetch the page title first
-    const pageTitle = await fetchNotionPageTitle(pageId);
-    console.log(`📖 Using page title: "${pageTitle}"`);
-
-    const toggleStructure = await fetchToggleBlockStructure({ pageId, text });
-    console.log(`✅ Toggle structure extracted in ${Date.now() - startTime}ms`);
-    
-    const graphData = transformToggleToReactFlow(toggleStructure.result, layoutConfig);
-    console.log(`✅ Graph transformed with sibling sorting: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges`);
-    
-    const cleanedGraphData = sanitizeGraphData(graphData);
-
-    const uniquePageId = `tool-${pageId}-${Date.now()}`;
-    await saveGraphToFirestore(uniquePageId, cleanedGraphData);
-    console.log(`✅ Graph stored with ID: ${uniquePageId}`);
-
-    const graphUrl = generateGraphUrl(uniquePageId);
-    console.log(`🔗 Generated graph URL: ${graphUrl}`);
-
-    try {
-      // Use the page title instead of the search text
-      const graphTitle = `🛠️ Business Tool: ${pageTitle}`;
-      const appendResult = await appendGraphToNotionPage(pageId, graphUrl, graphTitle);
-      console.log(`✅ Graph successfully added to Notion page`);
-      
-      res.json({
-        success: true,
-        graphUrl: graphUrl,
-        graphId: uniquePageId,
-        graphType: 'businessTool',
-        pageTitle: pageTitle, // Include the page title in response
-        stats: {
-          nodes: cleanedGraphData.nodes.length,
-          edges: cleanedGraphData.edges.length,
-          nodeTypes: cleanedGraphData.metadata.nodeTypes,
-          storage: isFirebaseEnabled ? 'firebase' : 'memory',
-          processingTimeMs: Date.now() - startTime,
-          layoutConfig: cleanedGraphData.metadata.layout,
-          algorithm: 'sibling-sorting-post-processing',
-          siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied
-        },
-        notionResult: appendResult,
-        message: `✅ Business Tool graph created for "${pageTitle}" with sibling sorting! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'}`
-      });
-      
-    } catch (notionError) {
-      console.error('❌ Failed to add graph to Notion page:', notionError);
-      
-      res.json({
-        success: true,
-        graphUrl: graphUrl,
-        graphId: uniquePageId,
-        graphType: 'businessTool',
-        pageTitle: pageTitle, // Include the page title in response
-        stats: {
-          nodes: cleanedGraphData.nodes.length,
-          edges: cleanedGraphData.edges.length,
-          nodeTypes: cleanedGraphData.metadata.nodeTypes,
-          storage: isFirebaseEnabled ? 'firebase' : 'memory',
-          processingTimeMs: Date.now() - startTime,
-          layoutConfig: cleanedGraphData.metadata.layout,
-          algorithm: 'sibling-sorting-post-processing',
-          siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied
-        },
-        warning: `Graph created but failed to add to Notion page: ${notionError.message}`,
-        message: `⚠️ Business Tool graph created for "${pageTitle}" with sibling sorting but couldn't add to Notion page.`
-      });
-    }
-
-  } catch (error) {
-    console.error('❌ Error creating Business Tool graph:', error);
-    
-    let errorMessage = error.message;
-    if (error.message.includes('No toggle')) {
-      errorMessage = `No toggle block found containing "${req.body?.text || 'Business Tool'}" inside any callout block`;
-    } else if (error.message.includes('No callout')) {
-      errorMessage = 'No callout blocks found in the page. Toggle blocks must be inside callout blocks.';
-    } else if (error.message.includes('timed out')) {
-      errorMessage = 'Request timed out - the toggle structure is too complex';
-    } else if (error.message.includes('Failed to fetch page')) {
-      errorMessage = 'Could not access the Notion page. Check the page ID and permissions.';
-    }
-
-    res.status(500).json({
-      success: false,
-      error: errorMessage,
-      graphType: 'businessTool',
-      platform: 'vercel',
+      openai: isOpenAIEnabled ? 'enabled' : 'fallback',
       processingTimeMs: Date.now() - startTime
     });
   }
@@ -1338,7 +1433,7 @@ app.post('/api/quick-test', async (req, res) => {
     const testPageId = '2117432eb8438055a473fc7198dc3fdc';
     const testText = 'Business Tool';
     
-    console.log('🧪 Running quick test with sibling sorting...');
+    console.log('🧪 Running quick test with sibling sorting and OpenAI summaries...');
     
     const createResponse = await fetch(`${req.protocol}://${req.get('host')}/api/create-business-tool-graph`, {
       method: 'POST',
@@ -1354,6 +1449,7 @@ app.post('/api/quick-test', async (req, res) => {
       testType: 'businessTool',
       platform: 'vercel',
       firebase: isFirebaseEnabled ? 'enabled' : 'memory-fallback',
+      openai: isOpenAIEnabled ? 'enabled' : 'fallback',
       algorithm: 'sibling-sorting-post-processing'
     });
 
@@ -1364,7 +1460,8 @@ app.post('/api/quick-test', async (req, res) => {
       error: error.message,
       testMode: true,
       testType: 'businessTool',
-      platform: 'vercel'
+      platform: 'vercel',
+      openai: isOpenAIEnabled ? 'enabled' : 'fallback'
     });
   }
 });
@@ -1389,11 +1486,11 @@ app.post('/api/graph-structure', async (req, res) => {
     const nodes = [];
     let nodeIdCounter = 1;
     
-    function extractStructure(block, parentId = null, level = 0) {
+    async function extractStructure(block, parentId = null, level = 0) {
       if (!block.content || block.content.trim() === '' || block.content === '—') {
         if (block.children && Array.isArray(block.children)) {
           for (const child of block.children) {
-            extractStructure(child, parentId, level);
+            await extractStructure(child, parentId, level);
           }
         }
         return null;
@@ -1426,8 +1523,9 @@ app.post('/api/graph-structure', async (req, res) => {
           notionBlockId: block.id
         };
         
-        if (nodeType === 'policy' && block.children && Array.isArray(block.children)) {
-          const policyContentBlocks = [];
+        // For policies and events, extract content and generate summary
+        if ((nodeType === 'policy' || nodeType === 'event') && block.children && Array.isArray(block.children)) {
+          const contentBlocks = [];
           
           for (const child of block.children) {
             if (child.content && child.content.trim() !== '' && child.content !== '—') {
@@ -1438,7 +1536,7 @@ app.post('/api/graph-structure', async (req, res) => {
                   !/←\s*JSON\s*Code/.test(childContent) &&
                   !/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(childContent)) {
                 
-                policyContentBlocks.push(childContent);
+                contentBlocks.push(childContent);
                 
                 if (child.children && Array.isArray(child.children)) {
                   const collectNestedContent = (nestedBlock) => {
@@ -1448,7 +1546,7 @@ app.post('/api/graph-structure', async (req, res) => {
                           !/←\s*Event/.test(nestedContent) &&
                           !/←\s*JSON\s*Code/.test(nestedContent) &&
                           !/[❶❷❸❹❺❻❼❽❾❿⓫⓬⓭⓮⓯⓰⓱⓲⓳⓴]\s*Condition/.test(nestedContent)) {
-                        policyContentBlocks.push(nestedContent);
+                        contentBlocks.push(nestedContent);
                       }
                     }
                     if (nestedBlock.children && Array.isArray(nestedBlock.children)) {
@@ -1461,8 +1559,14 @@ app.post('/api/graph-structure', async (req, res) => {
             }
           }
           
-          if (policyContentBlocks.length > 0) {
-            nodeData.policyContent = policyContentBlocks.join('\n\n');
+          if (contentBlocks.length > 0) {
+            const fullContent = contentBlocks.join('\n\n');
+            nodeData.originalContent = fullContent;
+            
+            // Generate smart summary
+            const summary = await generateSmartSummary(fullContent, nodeType);
+            nodeData.smartSummary = summary;
+            nodeData.summaryMethod = isOpenAIEnabled ? 'OpenAI' : 'Fallback';
           }
         }
         
@@ -1470,7 +1574,7 @@ app.post('/api/graph-structure', async (req, res) => {
         
         if (block.children && Array.isArray(block.children)) {
           for (const child of block.children) {
-            extractStructure(child, nodeData.id, level + 1);
+            await extractStructure(child, nodeData.id, level + 1);
           }
         }
         
@@ -1478,7 +1582,7 @@ app.post('/api/graph-structure', async (req, res) => {
       } else {
         if (block.children && Array.isArray(block.children)) {
           for (const child of block.children) {
-            extractStructure(child, parentId, level);
+            await extractStructure(child, parentId, level);
           }
         }
         return null;
@@ -1486,14 +1590,16 @@ app.post('/api/graph-structure', async (req, res) => {
     }
     
     const parsedStructure = JSON.parse(toggleStructure.result);
-    extractStructure(parsedStructure.toggleBlock);
+    await extractStructure(parsedStructure.toggleBlock);
     
     console.log(`✅ Simplified structure created: ${nodes.length} nodes`);
 
     res.json({
       results: nodes,
       resultsJson: JSON.stringify(nodes, null, 2),
-      algorithm: 'sibling-sorting-post-processing'
+      algorithm: 'sibling-sorting-post-processing',
+      openai: isOpenAIEnabled ? 'enabled' : 'fallback',
+      smartSummariesGenerated: nodes.filter(n => n.smartSummary).length
     });
 
   } catch (error) {
@@ -1507,7 +1613,8 @@ app.post('/api/graph-structure', async (req, res) => {
     }
 
     res.status(500).json({
-      error: errorMessage
+      error: errorMessage,
+      openai: isOpenAIEnabled ? 'enabled' : 'fallback'
     });
   }
 });
@@ -1520,10 +1627,12 @@ if (require.main === module) {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`🔥 Firebase: ${isFirebaseEnabled ? 'Enabled' : 'Memory fallback'}`);
     console.log(`📝 Notion: ${NOTION_TOKEN ? 'Configured' : 'Missing'}`);
+    console.log(`🤖 OpenAI: ${isOpenAIEnabled ? 'Enabled (GPT-3.5 Turbo)' : 'Fallback summaries'}`);
     console.log(`🏢 Business ECP support: Enabled`);
     console.log(`🛠️ Business Tool support: Enabled`);
     console.log(`📊 Graph structure extraction: Enabled`);
     console.log(`🎯 Sibling sorting post-processing: Active`);
+    console.log(`💡 Smart summaries: ${isOpenAIEnabled ? 'OpenAI GPT-3.5' : 'Rule-based fallback'}`);
     console.log(`📐 Default layout config:`, LAYOUT_CONFIG);
     console.log(`🔧 Algorithm: sibling-sorting-post-processing`);
   });
