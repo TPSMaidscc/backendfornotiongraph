@@ -4,7 +4,7 @@ const cors = require('cors');
 const OpenAI = require('openai');
 // Initialize OpenAI
 const openai = new OpenAI({
-  apiKey: ''
+  apiKey: process.env.OPENAI_API_KEY || 'your_key'
 });
 
 // Firebase Admin SDK
