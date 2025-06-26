@@ -1749,3 +1749,110 @@ if (require.main === module) {
     console.log(`🔧 Algorithm: sibling-sorting-post-processing`);
   });
 }
+app.post('/api/create-business-tool-graph', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    const { pageId, text = 'Business Tool', layoutConfig } = req.body;
+
+    if (!pageId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required parameter: pageId'
+      });
+    }
+
+    console.log(`🛠️ Creating Business Tool graph with sibling sorting and AI summaries for page ${pageId} with text "${text}"`);
+
+    const pageTitle = await fetchNotionPageTitle(pageId);
+    console.log(`📖 Using page title: "${pageTitle}"`);
+
+    const toggleStructure = await fetchToggleBlockStructure({ pageId, text });
+    console.log(`✅ Toggle structure extracted in ${Date.now() - startTime}ms`);
+    
+    const graphData = await transformToggleToReactFlow(toggleStructure.result, layoutConfig, pageTitle);
+    console.log(`✅ Graph transformed with sibling sorting and AI summaries: ${graphData.nodes.length} nodes, ${graphData.edges.length} edges`);
+    
+    const cleanedGraphData = sanitizeGraphData(graphData);
+
+    const uniquePageId = `tool-${pageId}-${Date.now()}`;
+    await saveGraphToFirestore(uniquePageId, cleanedGraphData);
+    console.log(`✅ Graph stored with ID: ${uniquePageId}`);
+
+    const graphUrl = generateGraphUrl(uniquePageId);
+    console.log(`🔗 Generated graph URL: ${graphUrl}`);
+
+    try {
+      const graphTitle = `🛠️ Business Tool: ${pageTitle}`;
+      const appendResult = await appendGraphToNotionPage(pageId, graphUrl, graphTitle);
+      console.log(`✅ Graph successfully added to Notion page`);
+      
+      res.json({
+        success: true,
+        graphUrl: graphUrl,
+        graphId: uniquePageId,
+        graphType: 'businessTool',
+        pageTitle: pageTitle,
+        stats: {
+          nodes: cleanedGraphData.nodes.length,
+          edges: cleanedGraphData.edges.length,
+          nodeTypes: cleanedGraphData.metadata.nodeTypes,
+          storage: isFirebaseEnabled ? 'firebase' : 'memory',
+          processingTimeMs: Date.now() - startTime,
+          layoutConfig: cleanedGraphData.metadata.layout,
+          algorithm: 'sibling-sorting-post-processing',
+          siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied,
+          aiSummariesEnabled: cleanedGraphData.metadata.aiSummariesEnabled
+        },
+        notionResult: appendResult,
+        message: `✅ Business Tool graph created for "${pageTitle}" with sibling sorting and AI summaries! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'}`
+      });
+      
+    } catch (notionError) {
+      console.error('❌ Failed to add graph to Notion page:', notionError);
+      
+      res.json({
+        success: true,
+        graphUrl: graphUrl,
+        graphId: uniquePageId,
+        graphType: 'businessTool',
+        pageTitle: pageTitle,
+        stats: {
+          nodes: cleanedGraphData.nodes.length,
+          edges: cleanedGraphData.edges.length,
+          nodeTypes: cleanedGraphData.metadata.nodeTypes,
+          storage: isFirebaseEnabled ? 'firebase' : 'memory',
+          processingTimeMs: Date.now() - startTime,
+          layoutConfig: cleanedGraphData.metadata.layout,
+          algorithm: 'sibling-sorting-post-processing',
+          siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied,
+          aiSummariesEnabled: cleanedGraphData.metadata.aiSummariesEnabled
+        },
+        warning: `Graph created but failed to add to Notion page: ${notionError.message}`,
+        message: `⚠️ Business Tool graph created for "${pageTitle}" with sibling sorting and AI summaries but couldn't add to Notion page.`
+      });
+    }
+
+  } catch (error) {
+    console.error('❌ Error creating Business Tool graph:', error);
+    
+    let errorMessage = error.message;
+    if (error.message.includes('No toggle')) {
+      errorMessage = `No toggle block found containing "${req.body?.text || 'Business Tool'}" inside any callout block`;
+    } else if (error.message.includes('No callout')) {
+      errorMessage = 'No callout blocks found in the page. Toggle blocks must be inside callout blocks.';
+    } else if (error.message.includes('timed out')) {
+      errorMessage = 'Request timed out - the toggle structure is too complex';
+    } else if (error.message.includes('Failed to fetch page')) {
+      errorMessage = 'Could not access the Notion page. Check the page ID and permissions.';
+    }
+
+    res.status(500).json({
+      success: false,
+      error: errorMessage,
+      graphType: 'businessTool',
+      platform: 'vercel',
+      processingTimeMs: Date.now() - startTime
+    });
+  }
+});
