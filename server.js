@@ -263,6 +263,47 @@ async function appendGraphToNotionPage(notionPageId, graphUrl, graphTitle) {
   }
 }
 
+// Add this new function to fetch the page title
+async function fetchNotionPageTitle(pageId) {
+  try {
+    console.log(`📝 Fetching page title for: ${pageId}`);
+    
+    const page = await notion.pages.retrieve({ page_id: pageId });
+    
+    if (!page) {
+      throw new Error('Notion page not found or access denied');
+    }
+
+    // Extract title from different possible properties
+    let title = 'Untitled Page';
+    
+    if (page.properties) {
+      // Look for title in common property names
+      const titleProperty = page.properties.title || 
+                           page.properties.Title || 
+                           page.properties.Name || 
+                           page.properties.name ||
+                           Object.values(page.properties).find(prop => prop.type === 'title');
+      
+      if (titleProperty && titleProperty.title && titleProperty.title.length > 0) {
+        title = titleProperty.title.map(text => text.plain_text || '').join('');
+      }
+    }
+
+    // Fallback: try to get title from the page object itself
+    if (title === 'Untitled Page' && page.title) {
+      title = page.title;
+    }
+
+    console.log(`✅ Page title found: "${title}"`);
+    return title;
+    
+  } catch (error) {
+    console.error('❌ Error fetching page title:', error);
+    return 'Unknown Page'; // Fallback title
+  }
+}
+
 async function fetchToggleBlockStructure({ pageId, text }) {
   const baseUrl = 'https://api.notion.com/v1/blocks';
   const startTime = Date.now();
@@ -949,6 +990,7 @@ app.get('/api/graph-data/:pageId', async (req, res) => {
   }
 });
 
+// Update the create-graph endpoint
 app.post('/api/create-graph', async (req, res) => {
   const startTime = Date.now();
   
@@ -963,6 +1005,10 @@ app.post('/api/create-graph', async (req, res) => {
     }
 
     console.log(`🏢 Creating Business ECP graph with sibling sorting for page ${pageId} with text "${text}"`);
+
+    // Fetch the page title first
+    const pageTitle = await fetchNotionPageTitle(pageId);
+    console.log(`📖 Using page title: "${pageTitle}"`);
 
     const toggleStructure = await fetchToggleBlockStructure({ pageId, text });
     console.log(`✅ Toggle structure extracted in ${Date.now() - startTime}ms`);
@@ -980,7 +1026,8 @@ app.post('/api/create-graph', async (req, res) => {
     console.log(`🔗 Generated graph URL: ${graphUrl}`);
 
     try {
-      const graphTitle = `🏢 Business ECP: ${text}`;
+      // Use the page title instead of the search text
+      const graphTitle = `🏢 Business ECP: ${pageTitle}`;
       const appendResult = await appendGraphToNotionPage(pageId, graphUrl, graphTitle);
       console.log(`✅ Graph successfully added to Notion page`);
       
@@ -989,6 +1036,7 @@ app.post('/api/create-graph', async (req, res) => {
         graphUrl: graphUrl,
         graphId: uniquePageId,
         graphType: 'businessECP',
+        pageTitle: pageTitle, // Include the page title in response
         stats: {
           nodes: cleanedGraphData.nodes.length,
           edges: cleanedGraphData.edges.length,
@@ -1000,7 +1048,7 @@ app.post('/api/create-graph', async (req, res) => {
           siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied
         },
         notionResult: appendResult,
-        message: `✅ Business ECP graph created with sibling sorting! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'}`
+        message: `✅ Business ECP graph created for "${pageTitle}" with sibling sorting! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'}`
       });
       
     } catch (notionError) {
@@ -1011,6 +1059,7 @@ app.post('/api/create-graph', async (req, res) => {
         graphUrl: graphUrl,
         graphId: uniquePageId,
         graphType: 'businessECP',
+        pageTitle: pageTitle, // Include the page title in response
         stats: {
           nodes: cleanedGraphData.nodes.length,
           edges: cleanedGraphData.edges.length,
@@ -1022,7 +1071,7 @@ app.post('/api/create-graph', async (req, res) => {
           siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied
         },
         warning: `Graph created but failed to add to Notion page: ${notionError.message}`,
-        message: `⚠️ Business ECP graph created with sibling sorting but couldn't add to Notion page.`
+        message: `⚠️ Business ECP graph created for "${pageTitle}" with sibling sorting but couldn't add to Notion page.`
       });
     }
 
@@ -1050,6 +1099,8 @@ app.post('/api/create-graph', async (req, res) => {
   }
 });
 
+
+// Update the create-business-tool-graph endpoint
 app.post('/api/create-business-tool-graph', async (req, res) => {
   const startTime = Date.now();
   
@@ -1064,6 +1115,10 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
     }
 
     console.log(`🛠️ Creating Business Tool graph with sibling sorting for page ${pageId} with text "${text}"`);
+
+    // Fetch the page title first
+    const pageTitle = await fetchNotionPageTitle(pageId);
+    console.log(`📖 Using page title: "${pageTitle}"`);
 
     const toggleStructure = await fetchToggleBlockStructure({ pageId, text });
     console.log(`✅ Toggle structure extracted in ${Date.now() - startTime}ms`);
@@ -1081,7 +1136,8 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
     console.log(`🔗 Generated graph URL: ${graphUrl}`);
 
     try {
-      const graphTitle = `🛠️ Business Tool: ${text}`;
+      // Use the page title instead of the search text
+      const graphTitle = `🛠️ Business Tool: ${pageTitle}`;
       const appendResult = await appendGraphToNotionPage(pageId, graphUrl, graphTitle);
       console.log(`✅ Graph successfully added to Notion page`);
       
@@ -1090,6 +1146,7 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
         graphUrl: graphUrl,
         graphId: uniquePageId,
         graphType: 'businessTool',
+        pageTitle: pageTitle, // Include the page title in response
         stats: {
           nodes: cleanedGraphData.nodes.length,
           edges: cleanedGraphData.edges.length,
@@ -1101,7 +1158,7 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
           siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied
         },
         notionResult: appendResult,
-        message: `✅ Business Tool graph created with sibling sorting! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'}`
+        message: `✅ Business Tool graph created for "${pageTitle}" with sibling sorting! ${isFirebaseEnabled ? 'Stored in Firebase.' : 'Stored in memory.'}`
       });
       
     } catch (notionError) {
@@ -1112,6 +1169,7 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
         graphUrl: graphUrl,
         graphId: uniquePageId,
         graphType: 'businessTool',
+        pageTitle: pageTitle, // Include the page title in response
         stats: {
           nodes: cleanedGraphData.nodes.length,
           edges: cleanedGraphData.edges.length,
@@ -1123,7 +1181,7 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
           siblingSortingApplied: cleanedGraphData.metadata.siblingSortingApplied
         },
         warning: `Graph created but failed to add to Notion page: ${notionError.message}`,
-        message: `⚠️ Business Tool graph created with sibling sorting but couldn't add to Notion page.`
+        message: `⚠️ Business Tool graph created for "${pageTitle}" with sibling sorting but couldn't add to Notion page.`
       });
     }
 
