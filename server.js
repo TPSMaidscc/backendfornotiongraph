@@ -164,9 +164,7 @@ Output:
 
 
 Applies to any Filipina maid whose visa renewal isn’t actively in progress—that is, it’s still within the first contract year with a newly issued (or issuing) residency visa, or the renewal workflow is marked “Not Started,” “Completed,” “Apply for R-visa,” or “Get Form from GDRFA.”
-Technical condition: ${conditionContent}
-
-Human-readable condition:`;
+Condition: ${conditionContent}`;
 
     const completion = await openai.chat.completions.create({
       model: "gpt-4.1",
