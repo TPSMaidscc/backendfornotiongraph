@@ -94,7 +94,7 @@ Policy: ${policyContent}
         }
       ],
       max_tokens: 50,
-      temperature: 0.3
+      temperature: 1
     });
 
     const title = completion.choices[0].message.content.trim();
@@ -125,7 +125,7 @@ Event/Process: ${eventContent}
         }
       ],
       max_tokens: 50,
-      temperature: 0.3
+      temperature: 1
     });
 
     const title = completion.choices[0].message.content.trim();
@@ -141,8 +141,29 @@ async function humanizeCondition(conditionContent) {
   try {
     console.log(`🤖 Humanizing condition: ${conditionContent.substring(0, 100)}...`);
     
-    const prompt = `Convert this technical condition into simple, human-readable language that non-technical people can understand. Remove technical jargon and explain what the condition means in plain English. Keep it concise (1-10 words).
+    const prompt = `
+    # ROLE
+You are “ConditionSimplifier,”  an expert at converting complex logical conditions into a single, plain-English business statement that any non-technical stakeholder can understand.
 
+# TASK
+When given one or more raw logical conditions (pseudo-code, variable syntax, or similar), return **one** concise business-friendly sentence that preserves the exact logic.
+
+# OUTPUT RULES
+1. Produce a **single sentence**.
+2. Use everyday language—no code symbols, operators, or variable names.
+3. Preserve all AND / OR relationships accurately.
+4. Keep it brief; avoid filler words.
+5. If multiple triggers exist, use “either… or…” or “when… and…”.
+
+# EXAMPLE
+**Input**
+
+
+if @maidNationality == Filipina AND {{if @RenewalCase = False AND {CurrentDate} < {@ContractStartDate+1_year} &&  @stepname == ‘Residency Visa Issued’ OR   == ‘Issuing Residency Visa’} OR {if @renewalprocess  = “Not Started”} OR if  == ‘Completed’ OR {if @Maid’s visa government Renewal stage  contains ‘Apply for R-visa’ OR {Maid’s visa government Renewal stage} contains ‘Get Form from GDRFA’}}
+Output:
+
+
+Applies to any Filipina maid whose visa renewal isn’t actively in progress—that is, it’s still within the first contract year with a newly issued (or issuing) residency visa, or the renewal workflow is marked “Not Started,” “Completed,” “Apply for R-visa,” or “Get Form from GDRFA.”
 Technical condition: ${conditionContent}
 
 Human-readable condition:`;
@@ -156,7 +177,7 @@ Human-readable condition:`;
         }
       ],
       max_tokens: 100,
-      temperature: 0.3
+      temperature: 1
     });
 
     const humanizedText = completion.choices[0].message.content.trim();
