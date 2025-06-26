@@ -86,13 +86,15 @@ Policy: ${policyContent}
 1-6-word title:`;
 
     const completion = await openai.chat.completions.create({
-      model: "o1",
+      model: "gpt-4.1",
       messages: [
         {
           role: "user",
           content: prompt
         }
       ],
+      max_tokens: 50,
+      temperature: 0.3
     });
 
     const title = completion.choices[0].message.content.trim();
@@ -115,13 +117,15 @@ Event/Process: ${eventContent}
 1-6-word title:`;
 
     const completion = await openai.chat.completions.create({
-      model: "o1",
+      model: "gpt-4.1",
       messages: [
         {
           role: "user",
           content: prompt
         }
       ],
+      max_tokens: 50,
+      temperature: 0.3
     });
 
     const title = completion.choices[0].message.content.trim();
@@ -144,13 +148,15 @@ Technical condition: ${conditionContent}
 Human-readable condition:`;
 
     const completion = await openai.chat.completions.create({
-      model: "o1",
+      model: "gpt-4.1",
       messages: [
         {
           role: "user",
           content: prompt
         }
       ],
+      max_tokens: 100,
+      temperature: 0.3
     });
 
     const humanizedText = completion.choices[0].message.content.trim();
