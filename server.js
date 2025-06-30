@@ -2,6 +2,7 @@ const express = require('express');
 const { Client } = require('@notionhq/client');
 const cors = require('cors');
 const OpenAI = require('openai');
+const { processNotionPage } = require('./validation');
 // Initialize OpenAI
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY || 'your_key'
@@ -1139,7 +1140,8 @@ app.get('/', (req, res) => {
       'GET /api/graph-data/:pageId/humanized',
       'POST /api/regenerate-ai-titles/:pageId',
       'POST /api/update-layout-config',
-      'GET /api/layout-config'
+      'GET /api/layout-config',
+      'POST /api/validate-ecp'
     ]
   });
 });
@@ -1852,6 +1854,78 @@ app.post('/api/create-business-tool-graph', async (req, res) => {
       error: errorMessage,
       graphType: 'businessTool',
       platform: 'vercel',
+      processingTimeMs: Date.now() - startTime
+    });
+  }
+});
+
+app.post('/api/validate-ecp', async (req, res) => {
+  const startTime = Date.now();
+  
+  try {
+    const { pageId, searchText = 'Business ECP', notionToken } = req.body;
+
+    if (!pageId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Missing required parameter: pageId'
+      });
+    }
+
+    // Use provided token or fall back to default
+    const tokenToUse = notionToken || NOTION_TOKEN;
+    
+    if (!tokenToUse) {
+      return res.status(400).json({
+        success: false,
+        error: 'No Notion token provided. Include notionToken in request body or configure server token.'
+      });
+    }
+
+    console.log(`🔍 Starting ECP validation for page ${pageId} with search text "${searchText}"`);
+
+    const validationResult = await processNotionPage(tokenToUse, pageId, searchText);
+    
+    console.log(`✅ ECP validation completed in ${Date.now() - startTime}ms`);
+
+    res.json({
+      success: true,
+      pageId: pageId,
+      searchText: searchText,
+      validated: validationResult.validated,
+      result: validationResult.result,
+      mainBlockId: validationResult.mainBlockId,
+      issues: validationResult.issues || [],
+      stats: {
+        processingTimeMs: Date.now() - startTime,
+        issueCount: validationResult.issues?.length || 0,
+        hasIssues: !validationResult.validated
+      },
+      message: validationResult.validated 
+        ? `✅ ECP structure validation passed successfully`
+        : `❌ ECP validation failed with ${validationResult.issues?.length || 0} issue(s)`
+    });
+
+  } catch (error) {
+    console.error('❌ Error during ECP validation:', error);
+    
+    let errorMessage = error.message;
+    if (error.message.includes('No toggle')) {
+      errorMessage = `No toggle block found containing "${req.body?.searchText || 'Business ECP'}" inside any callout block`;
+    } else if (error.message.includes('No callout')) {
+      errorMessage = 'No callout blocks found in the page. Toggle blocks must be inside callout blocks.';
+    } else if (error.message.includes('Authentication failed')) {
+      errorMessage = 'Notion authentication failed. Check your token permissions.';
+    } else if (error.message.includes('Could not access page')) {
+      errorMessage = 'Could not access the Notion page. Check the page ID and permissions.';
+    }
+
+    res.status(500).json({
+      success: false,
+      error: errorMessage,
+      pageId: req.body?.pageId || 'unknown',
+      searchText: req.body?.searchText || 'Business ECP',
+      validated: false,
       processingTimeMs: Date.now() - startTime
     });
   }
