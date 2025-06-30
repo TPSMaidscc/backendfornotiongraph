@@ -1,170 +1,265 @@
+#!/usr/bin/env python3
+"""
+Test script for ECP Validation API
+Tests the /api/validate-ecp endpoint
+"""
+
 import requests
 import json
-from datetime import datetime
+import time
+from typing import Dict, Any, Optional
 
-def print_hierarchy(node, all_nodes, indent_level):
-    """
-    Print node hierarchy in a tree structure
-    """
-    indent = "  " * indent_level
-    node_type = node.get('type', 'unknown').upper()
-    title_preview = node.get('title', 'No title')[:50]
-    if len(node.get('title', '')) > 50:
-        title_preview += "..."
-    
-    print(f"{indent}├─ {node_type}: {title_preview}")
-    
-    # Find children
-    children = [n for n in all_nodes if n.get('parentId') == node.get('id')]
-    for child in children:
-        print_hierarchy(child, all_nodes, indent_level + 1)
-
-def test_graph_structure_api():
-    """
-    Test the new /api/graph-structure endpoint
-    """
-    
-    # API Configuration
-    BASE_URL = "https://your-vercel-app.vercel.app"  # Replace with your actual Vercel URL
-    # For local testing, use: BASE_URL = "http://localhost:3002"
-    
-    ENDPOINT = f"{BASE_URL}/api/graph-structure"
-    
-    # Test data
-    test_data = {
-        "pageId": "2117432eb8438055a473fc7198dc3fdc",  # Replace with your actual page ID
-        "text": "Business ECP:"
-    }
-    
-    print("🚀 Testing Graph Structure API")
-    print(f"URL: {ENDPOINT}")
-    print(f"Payload: {json.dumps(test_data, indent=2)}")
-    print("-" * 50)
-    
-    try:
-        # Make the API request
-        print("📡 Sending request...")
-        response = requests.post(
-            ENDPOINT,
-            json=test_data,
-            headers={"Content-Type": "application/json"},
-            timeout=60  # 60 second timeout
-        )
+class ECPValidationTester:
+    def __init__(self, base_url: str = "http://localhost:3002"):
+        """
+        Initialize the tester with base URL
         
-        # Check response status
-        print(f"📊 Status Code: {response.status_code}")
+        Args:
+            base_url: Base URL of your server (default: localhost:3002)
+        """
+        self.base_url = base_url.rstrip('/')
+        self.session = requests.Session()
         
-        if response.status_code == 200:
-            # Parse JSON response - now it's wrapped in results
-            data = response.json()
-            nodes = data.get('results', [])
+    def test_health_check(self) -> bool:
+        """Test if the server is running"""
+        try:
+            print("🏥 Testing server health...")
+            response = self.session.get(f"{self.base_url}/health", timeout=10)
             
-            print("✅ SUCCESS!")
-            print(f"📈 Total Nodes: {len(nodes)}")
+            if response.status_code == 200:
+                data = response.json()
+                print(f"✅ Server is healthy!")
+                print(f"   Status: {data.get('status')}")
+                print(f"   Platform: {data.get('platform')}")
+                print(f"   Firebase: {data.get('firebase')}")
+                print(f"   Notion: {data.get('notion')}")
+                return True
+            else:
+                print(f"❌ Health check failed: {response.status_code}")
+                return False
+                
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Cannot connect to server: {e}")
+            return False
+    
+    def validate_ecp(self, 
+                     page_id: str, 
+                     search_text: str = "Business ECP",
+                     notion_token: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Test the ECP validation endpoint
+        
+        Args:
+            page_id: Notion page ID to validate
+            search_text: Text to search for in toggle blocks
+            notion_token: Optional Notion token (if not using server default)
             
-            # Print node breakdown
-            node_types = {}
-            for node in nodes:
-                node_type = node.get('type', 'unknown')
-                node_types[node_type] = node_types.get(node_type, 0) + 1
+        Returns:
+            Dictionary with validation results
+        """
+        
+        print(f"\n🔍 Testing ECP validation...")
+        print(f"   Page ID: {page_id}")
+        print(f"   Search Text: {search_text}")
+        print(f"   Using Token: {'Provided' if notion_token else 'Server Default'}")
+        
+        # Prepare request data
+        request_data = {
+            "pageId": page_id,
+            "searchText": search_text
+        }
+        
+        if notion_token:
+            request_data["notionToken"] = notion_token
             
-            print("\n📋 Node Types:")
-            for node_type, count in node_types.items():
-                print(f"  • {node_type}: {count}")
+        try:
+            start_time = time.time()
             
-            # Print first few nodes with details
-            print(f"\n🏗️  First {min(3, len(nodes))} Nodes:")
-            for i, node in enumerate(nodes[:3]):
-                print(f"  {i+1}. {node.get('type', 'unknown').upper()}")
-                print(f"     📝 Title: {node.get('title', 'No title')[:80]}...")
-                if node.get('type') == 'policy' and node.get('content'):
-                    content_preview = node.get('content', '')[:100]
-                    print(f"     📋 Content: {content_preview}...")
-                print(f"     🆔 ID: {node.get('id')}, Level: {node.get('level')}")
-                print(f"     🔗 Notion Block ID: {node.get('notionBlockId', 'N/A')}")
-                print(f"     👨‍👩‍👧‍👦 Parent ID: {node.get('parentId', 'None')}")
-                print()
+            response = self.session.post(
+                f"{self.base_url}/api/validate-ecp",
+                json=request_data,
+                timeout=60  # 60 second timeout for validation
+            )
             
-            # Show policy content examples
-            policy_nodes = [n for n in nodes if n.get('type') == 'policy']
-            if policy_nodes:
-                print(f"\n📋 Policy Content Examples:")
-                for i, policy in enumerate(policy_nodes[:2]):  # Show first 2 policies
-                    print(f"   Policy {i+1}: {policy.get('title', 'No title')[:60]}...")
-                    content = policy.get('content', '')
-                    if content:
-                        print(f"   Content: {content[:150]}...")
-                    print(f"   Block ID: {policy.get('notionBlockId')}")
-                    print()
+            end_time = time.time()
+            duration = (end_time - start_time) * 1000  # Convert to milliseconds
             
-            # Show hierarchy structure
-            print("🌳 Node Hierarchy:")
-            root_nodes = [n for n in nodes if n.get('parentId') is None]
-            for root in root_nodes:
-                print_hierarchy(root, nodes, 0)
+            print(f"⏱️  Request completed in {duration:.2f}ms")
+            print(f"📊 Response Status: {response.status_code}")
             
-            # Save full response to file
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            filename = f"graph_structure_{timestamp}.json"
-            with open(filename, 'w', encoding='utf-8') as f:
-                json.dump(data, f, indent=2, ensure_ascii=False)
-            print(f"\n💾 Full response saved to: {filename}")
+            # Parse response
+            if response.headers.get('content-type', '').startswith('application/json'):
+                result = response.json()
+            else:
+                result = {"error": "Non-JSON response", "text": response.text}
+            
+            # Display results
+            self._display_validation_results(result, response.status_code)
+            
+            return {
+                "status_code": response.status_code,
+                "duration_ms": duration,
+                "result": result
+            }
+            
+        except requests.exceptions.Timeout:
+            print("⏰ Request timed out after 60 seconds")
+            return {"error": "timeout", "status_code": 408}
+            
+        except requests.exceptions.RequestException as e:
+            print(f"❌ Request failed: {e}")
+            return {"error": str(e), "status_code": 0}
+    
+    def _display_validation_results(self, result: Dict[str, Any], status_code: int):
+        """Display validation results in a formatted way"""
+        
+        print(f"\n{'='*50}")
+        print(f"🔍 VALIDATION RESULTS")
+        print(f"{'='*50}")
+        
+        if status_code == 200 and result.get('success'):
+            # Successful validation
+            validated = result.get('validated', False)
+            issue_count = result.get('stats', {}).get('issueCount', 0)
+            
+            if validated:
+                print(f"✅ VALIDATION PASSED")
+                print(f"   {result.get('result', 'No message')}")
+            else:
+                print(f"❌ VALIDATION FAILED")
+                print(f"   {result.get('result', 'No message')}")
+                print(f"   Issues Found: {issue_count}")
+                
+                # Display issues if any
+                issues = result.get('issues', [])
+                if issues:
+                    print(f"\n📋 Validation Issues:")
+                    for i, issue in enumerate(issues, 1):
+                        print(f"   {i}. {issue.get('message', 'Unknown issue')}")
+                        print(f"      Location: {issue.get('location', 'Unknown')}")
+                        print(f"      Block ID: {issue.get('blockId', 'Unknown')}")
+            
+            # Display stats
+            stats = result.get('stats', {})
+            print(f"\n📊 Statistics:")
+            print(f"   Processing Time: {stats.get('processingTimeMs', 0)}ms")
+            print(f"   Main Block ID: {result.get('mainBlockId', 'Unknown')}")
             
         else:
-            print("❌ FAILED!")
-            print(f"Error: {response.status_code}")
-            try:
-                error_data = response.json()
-                print(f"Details: {error_data.get('error', 'Unknown error')}")
-            except:
-                print(f"Response text: {response.text}")
+            # Failed validation or error
+            print(f"❌ REQUEST FAILED")
+            print(f"   Status Code: {status_code}")
+            print(f"   Error: {result.get('error', 'Unknown error')}")
+            if 'pageId' in result:
+                print(f"   Page ID: {result['pageId']}")
     
-    except requests.exceptions.Timeout:
-        print("⏰ Request timed out (60 seconds)")
-    except requests.exceptions.ConnectionError:
-        print("🔌 Connection error - check your URL and internet connection")
-    except requests.exceptions.RequestException as e:
-        print(f"❌ Request error: {e}")
-    except Exception as e:
-        print(f"❌ Unexpected error: {e}")
-
-def test_health_check():
-    """
-    Quick health check to verify the API is running
-    """
-    BASE_URL = "https://your-vercel-app.vercel.app"  # Replace with your actual URL
-    
-    try:
-        print("🏥 Testing health check...")
-        response = requests.get(f"{BASE_URL}/health", timeout=10)
+    def run_test_suite(self, test_configs: list):
+        """
+        Run a suite of tests with different configurations
         
-        if response.status_code == 200:
-            data = response.json()
-            print("✅ API is healthy!")
-            print(f"   Status: {data.get('status')}")
-            print(f"   Firebase: {data.get('firebase')}")
-            print(f"   Notion: {data.get('notion')}")
-        else:
-            print(f"❌ Health check failed: {response.status_code}")
+        Args:
+            test_configs: List of test configuration dictionaries
+        """
+        print(f"\n🧪 RUNNING ECP VALIDATION TEST SUITE")
+        print(f"{'='*60}")
+        
+        # First check if server is healthy
+        if not self.test_health_check():
+            print("❌ Server health check failed. Aborting tests.")
+            return
+        
+        # Run each test
+        results = []
+        for i, config in enumerate(test_configs, 1):
+            print(f"\n📝 Test {i}/{len(test_configs)}: {config.get('name', f'Test {i}')}")
+            print(f"{'─'*40}")
             
-    except Exception as e:
-        print(f"❌ Health check error: {e}")
+            result = self.validate_ecp(
+                page_id=config['page_id'],
+                search_text=config.get('search_text', 'Business ECP'),
+                notion_token=config.get('notion_token')
+            )
+            
+            results.append({
+                'name': config.get('name', f'Test {i}'),
+                'config': config,
+                'result': result
+            })
+            
+            # Add delay between tests to avoid rate limiting
+            if i < len(test_configs):
+                print("⏳ Waiting 2 seconds before next test...")
+                time.sleep(2)
+        
+        # Summary
+        self._print_test_summary(results)
+        return results
+    
+    def _print_test_summary(self, results: list):
+        """Print a summary of all test results"""
+        print(f"\n🏁 TEST SUMMARY")
+        print(f"{'='*60}")
+        
+        passed = 0
+        failed = 0
+        
+        for result in results:
+            name = result['name']
+            status_code = result['result'].get('status_code', 0)
+            success = result['result'].get('result', {}).get('success', False)
+            validated = result['result'].get('result', {}).get('validated', False)
+            
+            if status_code == 200 and success:
+                if validated:
+                    print(f"✅ {name}: VALIDATION PASSED")
+                    passed += 1
+                else:
+                    print(f"⚠️  {name}: VALIDATION COMPLETED (Issues Found)")
+                    passed += 1
+            else:
+                print(f"❌ {name}: FAILED")
+                failed += 1
+        
+        print(f"\n📊 Results: {passed} passed, {failed} failed")
+
+
+def main():
+    """Main function to run the tests"""
+    
+    # Configuration - UPDATE THESE VALUES
+    SERVER_URL = "http://localhost:3002"  # Change if your server runs on different port
+    NOTION_TOKEN = "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"  # Your Notion token
+    
+    # Test configurations
+    test_configs = [
+        {
+            "name": "Valid ECP Page Test",
+            "page_id": "2117432eb843807581b3decd5507c6f5",  # Replace with your test page ID
+            "search_text": "Business ECP",
+            "notion_token": NOTION_TOKEN
+        }
+    ]
+    
+    # Create tester instance
+    tester = ECPValidationTester(SERVER_URL)
+    
+    print("🚀 Starting ECP Validation API Tests")
+    print(f"🌐 Server URL: {SERVER_URL}")
+    print(f"🔑 Using Token: {'***' + NOTION_TOKEN[-10:] if NOTION_TOKEN else 'Server Default'}")
+    
+    # Run the test suite
+    results = tester.run_test_suite(test_configs)
+    
+    print(f"\n🎯 All tests completed!")
+    return results
+
 
 if __name__ == "__main__":
-    print("🧪 Graph Structure API Test Script")
-    print("=" * 50)
+    # Install required packages if not already installed
+    try:
+        import requests
+    except ImportError:
+        print("❌ 'requests' package not found. Install it with: pip install requests")
+        exit(1)
     
-    # Update these values before running:
-    print("📝 IMPORTANT: Update these values in the script:")
-    print("   • BASE_URL: Your actual Vercel deployment URL")
-    print("   • pageId: Your actual Notion page ID")
-    print("=" * 50)
-    
-    # Run health check first
-    test_health_check()
-    print()
-    
-    # Run main test
-    test_graph_structure_api()
-    
-    print("\n🎉 Test completed!")
+    main()
